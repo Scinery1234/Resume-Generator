@@ -1,71 +1,58 @@
 import React from 'react';
-import './LandingPage.css';
+import './LandingPage.css'; // Assuming you'll have some CSS for this component
 
 const LandingPage = () => {
-  return (
-    <div className="landing-page">
-      {/* Navigation */}
-      <nav className="navbar">
-        <h1>Resume Generator</h1>
-        <ul>
-          <li>Home</li>
-          <li>Features</li>
-          <li>Pricing</li>
-          <li>Contact</li>
-        </ul>
-      </nav>
-
-      {/* Hero Section */}
-      <header className="hero">
-        <h2>Create Your Resume in Minutes</h2>
-        <p>Quick, easy, and professional resume building.</p>
-        <button>Get Started</button>
-      </header>
-
-      {/* Features Grid */}
-      <section className="features">
-        <h3>Features</h3>
-        <div className="features-grid">
-          <div className="feature-card">
-            <h4>Customizable Templates</h4>
-            <p>Choose from various templates that fit your style.</p>
-          </div>
-          <div className="feature-card">
-            <h4>Easy Editing</h4>
-            <p>Intuitive editor that makes resume editing a breeze.</p>
-          </div>
-          <div className="feature-card">
-            <h4>Download Options</h4>
-            <p>Download your resume in PDF or Word format.</p>
-          </div>
+    return (
+        <div>
+            <nav className="navbar">
+                <h1>Resume Generator</h1>
+                <ul>
+                    <li><a href="#hero">Home</a></li>
+                    <li><a href="#features">Features</a></li>
+                    <li><a href="#pricing">Pricing</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                </ul>
+            </nav>
+            <header id="hero" className="hero-section">
+                <h2>Create Your Perfect Resume</h2>
+                <p>Get started with our easy-to-use tools and make your resume stand out.</p>
+                <button className="cta-button">Get Started</button>
+            </header>
+            <section id="features" className="features-grid">
+                <h3>Features</h3>
+                <div className="feature">
+                    <h4>Easy to use</h4>
+                    <p>Our interface is user-friendly and intuitive.</p>
+                </div>
+                <div className="feature">
+                    <h4>Customization</h4>
+                    <p>Modify templates to fit your style and needs.</p>
+                </div>
+                <div className="feature">
+                    <h4>Save and Export</h4>
+                    <p>Save your progress and export your resume in various formats.</p>
+                </div>
+            </section>
+            <section id="pricing" className="pricing-cards">
+                <h3>Pricing</h3>
+                <div className="card">
+                    <h4>Free</h4>
+                    <p>Basic templates</p>
+                    <button>Select</button>
+                </div>
+                <div className="card">
+                    <h4>Pro</h4>
+                    <p>All templates + Premium support</p>
+                    <button>Select</button>
+                </div>
+                <div className="card">
+                    <h4>Enterprise</h4>
+                    <p>Custom solutions for businesses</p>
+                    <button>Select</button>
+                </div>
+            </section>
         </div>
-      </section>
-
-      {/* Pricing Cards */}
-      <section className="pricing">
-        <h3>Pricing</h3>
-        <div className="pricing-cards">
-          <div className="pricing-card">
-            <h4>Free</h4>
-            <p>Basic features at no cost.</p>
-          </div>
-          <div className="pricing-card">
-            <h4>Pro</h4>
-            <p>$9.99/month for advanced features.</p>
-          </div>
-          <div className="pricing-card">
-            <h4>Enterprise</h4>
-            <p>Contact us for custom solutions.</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer>
-        <p>© 2026 Resume Generator. All rights reserved.</p>
-      </footer>
-    </div>
-  );
+    );
 };
 
 export default LandingPage;
