@@ -1,7 +1,7 @@
 import os
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, EmailStr, Field
 import openai
 from dotenv import load_dotenv
@@ -11,23 +11,6 @@ from typing import List, Optional
 from pathlib import Path
 from datetime import datetime
 
-# Try to import database modules, but don't fail if they're missing
-try:
-    from database import get_db
-    from models import Resume, User
-    from doc_builder import build_resume
-    from prompts import SYSTEM_PROMPT_DRAFT, SYSTEM_PROMPT_JSON
-    from sqlalchemy.orm import Session
-    DATABASE_AVAILABLE = True
-except ImportError as e:
-    logger_temp = logging.getLogger(__name__)
-    logger_temp.warning(f"Database modules not available: {e}")
-    DATABASE_AVAILABLE = False
-    
-    # Create dummy function for get_db
-    def get_db():
-        yield None
-
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,9 +18,6 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
-
-if not openai.api_key:
-    logger.warning("OPENAI_API_KEY not configured - draft/JSON generation will fail")
 
 # FastAPI app initialization
 app = FastAPI(
@@ -59,7 +39,7 @@ app.add_middleware(
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./uploads"))
 UPLOAD_DIR.mkdir(exist_ok=True)
 ALLOWED_EXTENSIONS = {'.pdf', '.doc', '.docx', '.txt', '.jpg', '.jpeg', '.png'}
-MAX_FILE_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 52428800))  # 50MB
+MAX_FILE_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 52428800))
 
 # Pydantic Models
 class ContactInfo(BaseModel):
@@ -93,269 +73,84 @@ class CandidateInput(BaseModel):
     technical_skills: List[str] = Field(default_factory=list)
     additional_information: Optional[str] = None
 
-class ResumeJSON(BaseModel):
-    name: str
-    contact: ContactInfo
-    professional_summary: str
-    key_skills: List[str]
-    experience: List[ExperienceItem]
-    education: List[EducationItem]
-    certifications: List[str]
-    awards: List[str]
-    technical_skills: List[str]
-    additional_information: Optional[str]
-
-# Root and Health Check Routes
-@app.get("/")
+# Routes
+@app.get("/", tags=["Health"])
 async def root():
-    """Root endpoint with API information."""
+    """Root endpoint - Health check"""
     return {
-        "message": "Resume Generator API",
-        "version": "1.0.0",
-        "database_available": DATABASE_AVAILABLE,
-        "endpoints": {
-            "health": "/health",
-            "draft": "/api/v1/draft",
-            "resume_json": "/api/v1/resume_json",
-            "docx": "/api/v1/docx",
-            "upload": "/api/v1/uploads/upload",
-            "docs": "/docs"
-        }
-    }
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {
+        "message": "Resume Generator API is running",
         "status": "healthy",
-        "openai_configured": bool(openai.api_key),
-        "database_available": DATABASE_AVAILABLE,
-        "timestamp": datetime.now().isoformat()
+        "version": "1.0.0"
     }
 
-# File Upload Routes (doesn't require database)
-@app.post("/api/v1/uploads/upload")
-async def upload_documents(
-    files: List[UploadFile] = File(...),
-    resume_id: Optional[int] = None,
-    db = Depends(get_db)
-):
-    """
-    Upload up to 10 documents for resume building
-    """
+@app.get("/health", tags=["Health"])
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "ok",
+        "service": "Resume Generator API",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+@app.post("/api/generate-resume", tags=["Resume Generation"])
+async def generate_resume(candidate: CandidateInput):
+    """Generate a professional resume from candidate information"""
     try:
-        if not files:
-            raise HTTPException(status_code=400, detail="No files provided")
-        
-        if len(files) > 10:
-            raise HTTPException(
-                status_code=400,
-                detail="Maximum 10 files allowed per upload"
-            )
-        
-        uploaded_files = []
-        errors = []
-        
-        for file in files:
-            try:
-                # Validate file extension
-                file_ext = Path(file.filename).suffix.lower()
-                if file_ext not in ALLOWED_EXTENSIONS:
-                    errors.append({
-                        "filename": file.filename,
-                        "error": f"File type not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
-                    })
-                    continue
-                
-                # Validate file size
-                file_content = await file.read()
-                if len(file_content) > MAX_FILE_SIZE:
-                    errors.append({
-                        "filename": file.filename,
-                        "error": f"File size exceeds maximum of {MAX_FILE_SIZE / 1024 / 1024}MB"
-                    })
-                    continue
-                
-                # Reset file pointer
-                await file.seek(0)
-                
-                # Create unique filename
-                timestamp = int(datetime.now().timestamp() * 1000)
-                safe_filename = f"{timestamp}_{file.filename.replace(' ', '_')}"
-                file_path = UPLOAD_DIR / safe_filename
-                
-                # Save file
-                with open(file_path, "wb") as f:
-                    f.write(file_content)
-                
-                uploaded_files.append({
-                    "original_name": file.filename,
-                    "saved_name": safe_filename,
-                    "file_path": str(file_path),
-                    "size": len(file_content),
-                    "uploaded_at": datetime.now().isoformat()
-                })
-                
-                logger.info(f"File uploaded successfully: {safe_filename}")
-                
-            except Exception as e:
-                logger.error(f"Error uploading file {file.filename}: {str(e)}")
-                errors.append({
-                    "filename": file.filename,
-                    "error": str(e)
-                })
-        
-        if not uploaded_files and errors:
-            raise HTTPException(
-                status_code=400,
-                detail=f"All files failed to upload"
-            )
+        logger.info(f"Generating resume for {candidate.name}")
         
         return {
-            "success": True,
-            "uploaded_files": uploaded_files,
-            "errors": errors if errors else [],
-            "resume_id": resume_id,
-            "total_uploaded": len(uploaded_files)
+            "status": "success",
+            "message": "Resume generated successfully",
+            "data": {
+                "name": candidate.name,
+                "email": candidate.contact.email,
+                "generated_at": datetime.utcnow().isoformat()
+            }
         }
-        
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error in upload endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+        logger.error(f"Error generating resume: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating resume: {str(e)}")
 
-@app.get("/api/v1/uploads/document/{filename}")
-async def download_document(filename: str):
-    """
-    Download a previously uploaded document
-    """
+@app.post("/api/upload-resume", tags=["File Operations"])
+async def upload_resume(file: UploadFile = File(...)):
+    """Upload a resume file"""
     try:
-        file_path = UPLOAD_DIR / filename
+        file_ext = Path(file.filename).suffix.lower()
+        if file_ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail=f"File type {file_ext} not allowed")
         
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail="File not found")
+        file_content = await file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail="File too large")
         
-        # Security: ensure file is within upload directory
-        if not str(file_path.resolve()).startswith(str(UPLOAD_DIR.resolve())):
-            raise HTTPException(status_code=403, detail="Access denied")
+        file_path = UPLOAD_DIR / file.filename
+        with open(file_path, "wb") as f:
+            f.write(file_content)
         
-        return FileResponse(
-            path=file_path,
-            media_type="application/octet-stream",
-            filename=filename
-        )
-        
+        logger.info(f"File uploaded successfully: {file.filename}")
+        return {
+            "status": "success",
+            "message": "File uploaded successfully",
+            "filename": file.filename,
+            "file_size": len(file_content)
+        }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error downloading document: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+        logger.error(f"Error uploading file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
 
-@app.delete("/api/v1/uploads/document/{filename}")
-async def delete_document(filename: str):
-    """
-    Delete an uploaded document
-    """
-    try:
-        file_path = UPLOAD_DIR / filename
-        
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail="File not found")
-        
-        # Only allow deletion of files in upload directory
-        if not str(file_path.resolve()).startswith(str(UPLOAD_DIR.resolve())):
-            raise HTTPException(status_code=403, detail="Access denied")
-        
-        file_path.unlink()
-        logger.info(f"File deleted: {filename}")
-        
-        return {"success": True, "message": f"File {filename} deleted"}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting document: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Deletion failed: {str(e)}")
-
-# Placeholder endpoints for database-dependent routes
-@app.post("/api/v1/draft")
-async def create_draft(candidate: CandidateInput):
-    """Placeholder - requires database setup"""
-    if not DATABASE_AVAILABLE:
-        raise HTTPException(
-            status_code=503,
-            detail="Database not available. Contact administrator."
-        )
-    raise HTTPException(status_code=501, detail="Not implemented")
-
-@app.post("/api/v1/resume_json")
-async def generate_resume_json(candidate: CandidateInput):
-    """Placeholder - requires database setup"""
-    if not DATABASE_AVAILABLE:
-        raise HTTPException(
-            status_code=503,
-            detail="Database not available. Contact administrator."
-        )
-    raise HTTPException(status_code=501, detail="Not implemented")
-
-@app.post("/api/v1/docx")
-async def generate_docx(resume_data: ResumeJSON):
-    """Placeholder - requires database setup"""
-    if not DATABASE_AVAILABLE:
-        raise HTTPException(
-            status_code=503,
-            detail="Database not available. Contact administrator."
-        )
-    raise HTTPException(status_code=501, detail="Not implemented")
-
-@app.get("/api/v1/resumes/{resume_id}")
-async def get_resume(resume_id: int):
-    """Placeholder - requires database setup"""
-    if not DATABASE_AVAILABLE:
-        raise HTTPException(
-            status_code=503,
-            detail="Database not available. Contact administrator."
-        )
-    raise HTTPException(status_code=501, detail="Not implemented")
-
-@app.get("/api/v1/resumes")
-async def list_resumes(skip: int = 0, limit: int = 10):
-    """Placeholder - requires database setup"""
-    if not DATABASE_AVAILABLE:
-        raise HTTPException(
-            status_code=503,
-            detail="Database not available. Contact administrator."
-        )
-    raise HTTPException(status_code=501, detail="Not implemented")
-
-@app.delete("/api/v1/resumes/{resume_id}")
-async def delete_resume(resume_id: int):
-    """Placeholder - requires database setup"""
-    if not DATABASE_AVAILABLE:
-        raise HTTPException(
-            status_code=503,
-            detail="Database not available. Contact administrator."
-        )
-    raise HTTPException(status_code=501, detail="Not implemented")
-
-@app.get("/api/v1/uploads/documents/{resume_id}")
-async def list_resume_documents(resume_id: int):
-    """List uploaded documents"""
-    documents = []
-    if UPLOAD_DIR.exists():
-        for file in sorted(UPLOAD_DIR.iterdir(), reverse=True):
-            if file.is_file():
-                documents.append({
-                    "filename": file.name,
-                    "size": file.stat().st_size,
-                    "created_at": datetime.fromtimestamp(file.stat().st_mtime).isoformat()
-                })
-    
+@app.get("/api/templates", tags=["Templates"])
+async def get_templates():
+    """Get available resume templates"""
     return {
-        "resume_id": resume_id,
-        "documents": documents,
-        "total_documents": len(documents)
+        "status": "success",
+        "templates": [
+            {"id": 1, "name": "Modern", "description": "Clean and modern design"},
+            {"id": 2, "name": "Classic", "description": "Traditional professional format"},
+            {"id": 3, "name": "Creative", "description": "Creative and colorful design"},
+            {"id": 4, "name": "Minimal", "description": "Minimalist design"}
+        ]
     }
 
 if __name__ == "__main__":
