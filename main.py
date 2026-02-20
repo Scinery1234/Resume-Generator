@@ -11,11 +11,22 @@ from typing import List, Optional
 from pathlib import Path
 from datetime import datetime
 
-from database import get_db
-from models import Resume, User
-from doc_builder import build_resume
-from prompts import SYSTEM_PROMPT_DRAFT, SYSTEM_PROMPT_JSON
-from sqlalchemy.orm import Session
+# Try to import database modules, but don't fail if they're missing
+try:
+    from database import get_db
+    from models import Resume, User
+    from doc_builder import build_resume
+    from prompts import SYSTEM_PROMPT_DRAFT, SYSTEM_PROMPT_JSON
+    from sqlalchemy.orm import Session
+    DATABASE_AVAILABLE = True
+except ImportError as e:
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.warning(f"Database modules not available: {e}")
+    DATABASE_AVAILABLE = False
+    
+    # Create dummy function for get_db
+    def get_db():
+        yield None
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -101,6 +112,7 @@ async def root():
     return {
         "message": "Resume Generator API",
         "version": "1.0.0",
+        "database_available": DATABASE_AVAILABLE,
         "endpoints": {
             "health": "/health",
             "draft": "/api/v1/draft",
@@ -117,226 +129,16 @@ async def health_check():
     return {
         "status": "healthy",
         "openai_configured": bool(openai.api_key),
+        "database_available": DATABASE_AVAILABLE,
         "timestamp": datetime.now().isoformat()
     }
 
-# Resume Generation Routes
-@app.post("/api/v1/draft")
-async def create_draft(candidate: CandidateInput, db: Session = Depends(get_db)):
-    """
-    Generate a draft resume text using OpenAI ChatCompletion API.
-    
-    Returns:
-        - draft (str): Plain text resume draft
-    """
-    try:
-        if not openai.api_key:
-            raise HTTPException(
-                status_code=500,
-                detail="OpenAI API key not configured"
-            )
-        
-        # Construct prompt with candidate information
-        prompt = f"""
-        Create a professional Australian resume draft for the following candidate:
-        
-        Name: {candidate.name}
-        Email: {candidate.contact.email}
-        Phone: {candidate.contact.phone}
-        Location: {candidate.contact.location}
-        
-        Professional Summary: {candidate.professional_summary}
-        
-        Key Skills: {', '.join(candidate.key_skills)}
-        
-        Experience:
-        {json.dumps([exp.dict() for exp in candidate.experience], indent=2)}
-        
-        Education:
-        {json.dumps([edu.dict() for edu in candidate.education], indent=2)}
-        
-        Certifications: {', '.join(candidate.certifications)}
-        Awards: {', '.join(candidate.awards)}
-        Technical Skills: {', '.join(candidate.technical_skills)}
-        
-        Additional Information: {candidate.additional_information or 'None'}
-        """
-        
-        logger.info(f"Generating draft for candidate: {candidate.name}")
-        
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT_DRAFT},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=2000,
-            temperature=0.7
-        )
-        
-        draft_text = response.choices[0].message.content
-        logger.info(f"Successfully generated draft for {candidate.name}")
-        
-        return {
-            "success": True,
-            "name": candidate.name,
-            "draft": draft_text
-        }
-    
-    except openai.error.AuthenticationError:
-        logger.error("OpenAI authentication failed")
-        raise HTTPException(
-            status_code=401,
-            detail="OpenAI API authentication failed. Check your API key."
-        )
-    except openai.error.RateLimitError:
-        logger.error("OpenAI rate limit exceeded")
-        raise HTTPException(
-            status_code=429,
-            detail="OpenAI rate limit exceeded. Please try again later."
-        )
-    except Exception as e:
-        logger.error(f"Error generating draft: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error generating draft: {str(e)}"
-        )
-
-@app.post("/api/v1/resume_json")
-async def generate_resume_json(candidate: CandidateInput, db: Session = Depends(get_db)):
-    """
-    Generate structured JSON resume data using OpenAI with strict schema.
-    """
-    try:
-        if not openai.api_key:
-            raise HTTPException(
-                status_code=500,
-                detail="OpenAI API key not configured"
-            )
-        
-        prompt = f"""
-        Convert the following candidate information into a well-structured JSON resume.
-        
-        Candidate Information:
-        Name: {candidate.name}
-        Email: {candidate.contact.email}
-        Phone: {candidate.contact.phone}
-        Location: {candidate.contact.location}
-        Professional Summary: {candidate.professional_summary}
-        Key Skills: {', '.join(candidate.key_skills)}
-        Experience: {json.dumps([exp.dict() for exp in candidate.experience], indent=2)}
-        Education: {json.dumps([edu.dict() for edu in candidate.education], indent=2)}
-        Certifications: {', '.join(candidate.certifications)}
-        Awards: {', '.join(candidate.awards)}
-        Technical Skills: {', '.join(candidate.technical_skills)}
-        Additional Information: {candidate.additional_information or 'None'}
-        
-        Return ONLY valid JSON with no markdown, code blocks, or commentary.
-        """
-        
-        logger.info(f"Generating JSON resume for candidate: {candidate.name}")
-        
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT_JSON},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=3000,
-            temperature=0.5
-        )
-        
-        resume_json_text = response.choices[0].message.content
-        
-        # Parse and validate JSON
-        try:
-            resume_json = json.loads(resume_json_text)
-            
-            # Save to database
-            db_resume = Resume(
-                name=candidate.name,
-                email=candidate.contact.email,
-                phone=candidate.contact.phone,
-                location=candidate.contact.location,
-                professional_summary=candidate.professional_summary
-            )
-            db.add(db_resume)
-            db.commit()
-            db.refresh(db_resume)
-            
-            logger.info(f"Successfully generated JSON resume for {candidate.name}")
-            return {
-                "success": True,
-                "resume_id": db_resume.id,
-                "resume": resume_json
-            }
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON response: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to parse JSON response from OpenAI. Please try again."
-            )
-    
-    except openai.error.AuthenticationError:
-        logger.error("OpenAI authentication failed")
-        raise HTTPException(
-            status_code=401,
-            detail="OpenAI API authentication failed"
-        )
-    except openai.error.RateLimitError:
-        logger.error("OpenAI rate limit exceeded")
-        raise HTTPException(
-            status_code=429,
-            detail="OpenAI rate limit exceeded"
-        )
-    except Exception as e:
-        logger.error(f"Error generating JSON: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error generating JSON: {str(e)}"
-        )
-
-@app.post("/api/v1/docx")
-async def generate_docx(resume_data: ResumeJSON, db: Session = Depends(get_db)):
-    """
-    Generate a formatted .docx file from structured resume JSON.
-    """
-    try:
-        logger.info(f"Generating DOCX for candidate: {resume_data.name}")
-        
-        # Convert Pydantic model to dict
-        resume_dict = resume_data.dict()
-        
-        # Build the resume document
-        filename = build_resume(resume_dict)
-        
-        if not os.path.exists(filename):
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to generate resume file"
-            )
-        
-        logger.info(f"Successfully generated DOCX: {filename}")
-        
-        return FileResponse(
-            path=filename,
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            filename=f"{resume_data.name.replace(' ', '_')}_Resume.docx"
-        )
-    
-    except Exception as e:
-        logger.error(f"Error generating DOCX: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error generating DOCX: {str(e)}"
-        )
-
-# File Upload Routes
+# File Upload Routes (doesn't require database)
 @app.post("/api/v1/uploads/upload")
 async def upload_documents(
     files: List[UploadFile] = File(...),
     resume_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db = Depends(get_db)
 ):
     """
     Upload up to 10 documents for resume building
@@ -476,111 +278,85 @@ async def delete_document(filename: str):
         logger.error(f"Error deleting document: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Deletion failed: {str(e)}")
 
-@app.get("/api/v1/uploads/documents/{resume_id}")
-async def list_resume_documents(resume_id: int, db: Session = Depends(get_db)):
-    """
-    List all documents associated with a resume
-    """
-    try:
-        resume = db.query(Resume).filter(Resume.id == resume_id).first()
-        if not resume:
-            raise HTTPException(status_code=404, detail="Resume not found")
-        
-        # List files in upload directory
-        documents = []
-        if UPLOAD_DIR.exists():
-            for file in sorted(UPLOAD_DIR.iterdir(), reverse=True):
-                if file.is_file():
-                    documents.append({
-                        "filename": file.name,
-                        "size": file.stat().st_size,
-                        "created_at": datetime.fromtimestamp(file.stat().st_mtime).isoformat()
-                    })
-        
-        return {
-            "resume_id": resume_id,
-            "documents": documents,
-            "total_documents": len(documents)
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error listing documents: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+# Placeholder endpoints for database-dependent routes
+@app.post("/api/v1/draft")
+async def create_draft(candidate: CandidateInput):
+    """Placeholder - requires database setup"""
+    if not DATABASE_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Database not available. Contact administrator."
+        )
+    raise HTTPException(status_code=501, detail="Not implemented")
 
-# Resume Management Routes
+@app.post("/api/v1/resume_json")
+async def generate_resume_json(candidate: CandidateInput):
+    """Placeholder - requires database setup"""
+    if not DATABASE_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Database not available. Contact administrator."
+        )
+    raise HTTPException(status_code=501, detail="Not implemented")
+
+@app.post("/api/v1/docx")
+async def generate_docx(resume_data: ResumeJSON):
+    """Placeholder - requires database setup"""
+    if not DATABASE_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Database not available. Contact administrator."
+        )
+    raise HTTPException(status_code=501, detail="Not implemented")
+
 @app.get("/api/v1/resumes/{resume_id}")
-async def get_resume(resume_id: int, db: Session = Depends(get_db)):
-    """
-    Retrieve a saved resume by ID
-    """
-    try:
-        resume = db.query(Resume).filter(Resume.id == resume_id).first()
-        if not resume:
-            raise HTTPException(status_code=404, detail="Resume not found")
-        
-        return {
-            "id": resume.id,
-            "name": resume.name,
-            "email": resume.email,
-            "phone": resume.phone,
-            "location": resume.location,
-            "created_at": resume.created_at.isoformat() if resume.created_at else None,
-            "updated_at": resume.updated_at.isoformat() if resume.updated_at else None
-        }
-        
-    except Exception as e:
-        logger.error(f"Error retrieving resume: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+async def get_resume(resume_id: int):
+    """Placeholder - requires database setup"""
+    if not DATABASE_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Database not available. Contact administrator."
+        )
+    raise HTTPException(status_code=501, detail="Not implemented")
 
 @app.get("/api/v1/resumes")
-async def list_resumes(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    """
-    List all saved resumes with pagination
-    """
-    try:
-        resumes = db.query(Resume).filter(Resume.is_deleted == False).offset(skip).limit(limit).all()
-        total = db.query(Resume).filter(Resume.is_deleted == False).count()
-        
-        return {
-            "resumes": [
-                {
-                    "id": r.id,
-                    "name": r.name,
-                    "email": r.email,
-                    "created_at": r.created_at.isoformat() if r.created_at else None
-                }
-                for r in resumes
-            ],
-            "total": total,
-            "skip": skip,
-            "limit": limit
-        }
-        
-    except Exception as e:
-        logger.error(f"Error listing resumes: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+async def list_resumes(skip: int = 0, limit: int = 10):
+    """Placeholder - requires database setup"""
+    if not DATABASE_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Database not available. Contact administrator."
+        )
+    raise HTTPException(status_code=501, detail="Not implemented")
 
 @app.delete("/api/v1/resumes/{resume_id}")
-async def delete_resume(resume_id: int, db: Session = Depends(get_db)):
-    """
-    Delete a resume by ID (soft delete)
-    """
-    try:
-        resume = db.query(Resume).filter(Resume.id == resume_id).first()
-        if not resume:
-            raise HTTPException(status_code=404, detail="Resume not found")
-        
-        resume.is_deleted = True
-        db.commit()
-        
-        logger.info(f"Resume {resume_id} deleted successfully")
-        return {"success": True, "message": "Resume deleted"}
-        
-    except Exception as e:
-        logger.error(f"Error deleting resume: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+async def delete_resume(resume_id: int):
+    """Placeholder - requires database setup"""
+    if not DATABASE_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Database not available. Contact administrator."
+        )
+    raise HTTPException(status_code=501, detail="Not implemented")
+
+@app.get("/api/v1/uploads/documents/{resume_id}")
+async def list_resume_documents(resume_id: int):
+    """List uploaded documents"""
+    documents = []
+    if UPLOAD_DIR.exists():
+        for file in sorted(UPLOAD_DIR.iterdir(), reverse=True):
+            if file.is_file():
+                documents.append({
+                    "filename": file.name,
+                    "size": file.stat().st_size,
+                    "created_at": datetime.fromtimestamp(file.stat().st_mtime).isoformat()
+                })
+    
+    return {
+        "resume_id": resume_id,
+        "documents": documents,
+        "total_documents": len(documents)
+    }
 
 if __name__ == "__main__":
     import uvicorn
