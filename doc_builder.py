@@ -1,44 +1,52 @@
-from docx import Document
-from docx.shared import Pt
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx.oxml import OxmlElement
+import logging
 
+# Set up logging
+def setup_logging():
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def build_resume(name, sections):
-    \"\"\"Creates a resume document with the specified name and sections.\"\"\"  
-    document = Document()
-    
-    # Add name
-    name_paragraph = document.add_paragraph()  
-    name_run = name_paragraph.add_run(name)
-    name_run.bold = True
-    name_run.font.size = Pt(22)  
-    name_paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-    name_paragraph.add_run().add_break()  
+class ResumeBuilder:
+    def __init__(self):
+        self.resume_data = {}
 
-    # Add sections
-    for section_title, section_content in sections.items():
-        # Add section title
-        title_paragraph = document.add_paragraph()  
-        title_run = title_paragraph.add_run(section_title)
-        title_run.bold = True
-        title_paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
-        
-        # Add border to section title
-        border = OxmlElement('w:pBdr')
-        border_el = title_paragraph._element.add_element(border)
-        title_paragraph._element.append(border_el)
+    def collect_personal_info(self, name, contact_info):
+        try:
+            self.resume_data['name'] = name
+            self.resume_data['contact_info'] = contact_info
+            logging.info('Personal info collected successfully')
+        except Exception as e:
+            logging.error(f'Error collecting personal info: {e}')
 
-        # Add section content
-        content_paragraph = document.add_paragraph(section_content, style='ListBullet')
-        content_paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT 
-        
-    # Set body text font style
-    for paragraph in document.paragraphs:
-        if paragraph != name_paragraph:
-            for run in paragraph.runs:
-                run.font.name = 'Calibri'
-                run.font.size = Pt(11)
-    
-    # Save the resume
-    document.save('resume.docx')
+    def collect_experience(self, experience):
+        try:
+            self.resume_data['experience'] = experience
+            logging.info('Experience collected successfully')
+        except Exception as e:
+            logging.error(f'Error collecting experience: {e}')
+
+    def collect_education(self, education):
+        try:
+            self.resume_data['education'] = education
+            logging.info('Education collected successfully')
+        except Exception as e:
+            logging.error(f'Error collecting education: {e}')
+
+    def build_resume(self):
+        try:
+            # Code to format resume_data into a resume structure
+            resume = f"{self.resume_data['name']}\n{self.resume_data['contact_info']}\n"  
+            resume += 'Experience:\n'
+            for exp in self.resume_data['experience']:
+                resume += f"- {exp}\n"
+            resume += 'Education:\n'
+            for edu in self.resume_data['education']:
+                resume += f"- {edu}\n"
+            logging.info('Resume built successfully')
+            return resume
+        except Exception as e:
+            logging.error(f'Error building resume: {e}')
+            return 'Error building resume'
+
+if __name__ == '__main__':
+    setup_logging()
+    resume_builder = ResumeBuilder()
+    # Here you would typically collect data from the user
