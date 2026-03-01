@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { useHistory } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import './AuthPage.css';
 import { authAPI } from '../services/api';
 
 const AuthPage = () => {
-    const history = useHistory();
+    const navigate = useNavigate();
     const [isSignIn, setIsSignIn] = useState(true);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -30,7 +30,7 @@ const AuthPage = () => {
                 localStorage.setItem('token', response.token);
                 localStorage.setItem('userId', response.user_id);
                 // Redirect to wizard
-                history.push('/wizard');
+                navigate('/wizard');
             }
         } catch (err) {
             setError(err.response?.data?.detail || 'An error occurred. Please try again.');

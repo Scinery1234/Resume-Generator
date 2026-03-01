@@ -51,6 +51,13 @@ export const resumeAPI = {
     });
     return response.data;
   },
+
+  downloadByFilename: async (filename) => {
+    const response = await api.get(`/api/resumes/download-file/${filename}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
   
   delete: async (resumeId) => {
     const response = await api.delete(`/api/resumes/${resumeId}`);
