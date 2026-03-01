@@ -11,7 +11,7 @@
 }
 
 .hero {
-  background-image: url('hero-background.jpg');
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
   color: white;
   padding: 100px 20px;
   text-align: center;

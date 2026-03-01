@@ -1,16 +1,16 @@
 import React from 'react';
-import { useHistory } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import './LandingPage.css';
 
 const LandingPage = () => {
-    const history = useHistory();
+    const navigate = useNavigate();
     const token = localStorage.getItem('token');
 
     const handleGetStarted = () => {
         if (token) {
-            history.push('/wizard');
+            navigate('/wizard');
         } else {
-            history.push('/auth');
+            navigate('/auth');
         }
     };
 
@@ -24,9 +24,9 @@ const LandingPage = () => {
                     <li><a href="#pricing">Pricing</a></li>
                     <li><a href="#contact">Contact</a></li>
                     {token ? (
-                        <li><button onClick={() => history.push('/wizard')} className="nav-btn">My Resumes</button></li>
+                        <li><button onClick={() => navigate('/wizard')} className="nav-btn">My Resumes</button></li>
                     ) : (
-                        <li><button onClick={() => history.push('/auth')} className="nav-btn">Sign In</button></li>
+                        <li><button onClick={() => navigate('/auth')} className="nav-btn">Sign In</button></li>
                     )}
                 </ul>
             </nav>
