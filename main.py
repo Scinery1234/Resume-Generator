@@ -29,6 +29,65 @@ openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) if os.getenv("OPENAI
 # Initialize database
 init_db()
 
+# Seed demo user on startup (idempotent – skipped if already present)
+def seed_demo_user():
+    import hashlib, json
+    from database import SessionLocal
+    DEMO_EMAIL = "demo@example.com"
+    db = SessionLocal()
+    try:
+        if db.query(User).filter(User.email == DEMO_EMAIL).first():
+            return
+        skills = json.dumps(["Python", "JavaScript", "React", "FastAPI",
+                              "SQL", "REST APIs", "Git", "Docker"])
+        experience = json.dumps([
+            {"company": "Acme Corp", "title": "Software Engineer",
+             "start_date": "2021-06", "end_date": "Present",
+             "description": ("Built and maintained full-stack web applications using React "
+                             "and FastAPI. Reduced page load time by 40% through code "
+                             "splitting and caching optimisations.")},
+            {"company": "Startup Inc.", "title": "Junior Developer",
+             "start_date": "2019-08", "end_date": "2021-05",
+             "description": ("Developed REST APIs and automated reporting pipelines. "
+                             "Collaborated with the design team to ship three major product features.")},
+        ])
+        education = json.dumps([
+            {"institution": "State University", "degree": "B.S. Computer Science",
+             "start_date": "2015-09", "end_date": "2019-05", "gpa": "3.8"}
+        ])
+        summary = ("Results-driven software engineer with 5+ years of experience building "
+                   "scalable web applications. Passionate about clean code, developer "
+                   "experience, and delivering user-friendly products.")
+        user = User(
+            name="Alex Demo", email=DEMO_EMAIL,
+            password_hash=hashlib.sha256(b"demo1234").hexdigest(),
+            professional_summary=summary, skills=skills,
+            experience=experience, education=education,
+            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        )
+        db.add(user)
+        db.flush()
+        contact_info = json.dumps({"name": "Alex Demo", "email": DEMO_EMAIL,
+                                   "phone": "555-0100", "location": "San Francisco, CA",
+                                   "linkedin": "linkedin.com/in/alex-demo",
+                                   "github": "github.com/alex-demo"})
+        db.add(Resume(
+            user_id=user.id, name="Alex Demo – Software Engineer",
+            professional_summary=summary, skills=skills,
+            experience=experience, education=education,
+            contact_info=contact_info,
+            created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+        ))
+        db.commit()
+        logger.info("Demo user seeded: demo@example.com / demo1234")
+    except Exception as exc:
+        db.rollback()
+        logger.warning("Could not seed demo user: %s", exc)
+    finally:
+        db.close()
+
+seed_demo_user()
+
 # Security
 security = HTTPBearer()
 
