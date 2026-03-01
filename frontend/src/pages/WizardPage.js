@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { useHistory } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import './WizardPage.css';
 import { resumeAPI } from '../services/api';
 
 const WizardPage = () => {
-    const history = useHistory();
+    const navigate = useNavigate();
     const steps = ['Personal Info', 'Education', 'Experience', 'Skills', 'Review'];
     const [currentStep, setCurrentStep] = useState(0);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [generatedResumeId, setGeneratedResumeId] = useState(null);
+    const [generatedFilename, setGeneratedFilename] = useState(null);
 
     // Form data state
     const [formData, setFormData] = useState({
@@ -174,6 +175,7 @@ const WizardPage = () => {
             
             if (response.status === 'success') {
                 setGeneratedResumeId(response.data.resume_id);
+                setGeneratedFilename(response.data.filename);
                 alert('Resume generated successfully! You can download it now.');
             }
         } catch (err) {
@@ -184,13 +186,18 @@ const WizardPage = () => {
     };
 
     const handleDownload = async () => {
-        if (!generatedResumeId) {
+        if (!generatedFilename && !generatedResumeId) {
             setError('Please generate a resume first');
             return;
         }
 
         try {
-            const blob = await resumeAPI.download(generatedResumeId);
+            let blob;
+            if (generatedFilename) {
+                blob = await resumeAPI.downloadByFilename(generatedFilename);
+            } else {
+                blob = await resumeAPI.download(generatedResumeId);
+            }
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -210,7 +217,7 @@ const WizardPage = () => {
         <div className="wizard-page">
             <div className="wizard-header">
                 <h1>Resume Builder</h1>
-                <button onClick={() => history.push('/')} className="home-btn">Home</button>
+                <button onClick={() => navigate('/')} className="home-btn">Home</button>
             </div>
             <div className="progress-container">
                 <div className="progress-bar">
@@ -483,9 +490,9 @@ const WizardPage = () => {
                                 >
                                     {loading ? 'Generating...' : 'Generate Resume'}
                                 </button>
-                                {generatedResumeId && (
-                                    <button 
-                                        className="download-btn" 
+                                {(generatedResumeId || generatedFilename) && (
+                                    <button
+                                        className="download-btn"
                                         onClick={handleDownload}
                                     >
                                         Download Resume

@@ -196,15 +196,8 @@ async def generate_resume(
         user_id = candidate.user_id
         
         # Convert Pydantic model to dict (exclude user_id from dict)
-        candidate_dict = candidate.dict(exclude={'user_id'})
-        
-        # Build Word document
-        resume_builder = ResumeBuilder()
-        resume_filename = f"resume_{uuid.uuid4().hex[:8]}_{candidate.name.replace(' ', '_')}.docx"
-        resume_path = RESUMES_DIR / resume_filename
-        
-        resume_builder.build_word_document(str(resume_path), candidate_dict)
-        
+        candidate_dict = candidate.model_dump(exclude={'user_id'})
+
         # Optionally enhance with OpenAI (if API key is available)
         enhanced_summary = candidate.professional_summary
         if openai_client:
@@ -222,7 +215,17 @@ async def generate_resume(
                 enhanced_summary = response.choices[0].message.content
             except Exception as e:
                 logger.warning(f"OpenAI enhancement failed: {str(e)}, using original summary")
-        
+
+        # Update candidate_dict with enhanced summary before building the document
+        candidate_dict['professional_summary'] = enhanced_summary
+
+        # Build Word document
+        resume_builder = ResumeBuilder()
+        resume_filename = f"resume_{uuid.uuid4().hex[:8]}_{candidate.name.replace(' ', '_')}.docx"
+        resume_path = RESUMES_DIR / resume_filename
+
+        resume_builder.build_word_document(str(resume_path), candidate_dict)
+
         # Save to database if user_id provided
         resume_id = None
         if user_id:
@@ -232,9 +235,9 @@ async def generate_resume(
                 file_path=str(resume_path),
                 professional_summary=enhanced_summary,
                 skills=json.dumps(candidate.key_skills + candidate.technical_skills),
-                experience=json.dumps([exp.dict() for exp in candidate.experience]),
-                education=json.dumps([edu.dict() for edu in candidate.education]),
-                contact_info=json.dumps(candidate.contact.dict())
+                experience=json.dumps([exp.model_dump() for exp in candidate.experience]),
+                education=json.dumps([edu.model_dump() for edu in candidate.education]),
+                contact_info=json.dumps(candidate.contact.model_dump())
             )
             db.add(resume_record)
             db.commit()
@@ -250,6 +253,7 @@ async def generate_resume(
                 "email": candidate.contact.email,
                 "file_path": str(resume_path),
                 "filename": resume_filename,
+                "download_url": f"/api/resumes/download-file/{resume_filename}",
                 "generated_at": datetime.utcnow().isoformat()
             }
         }
@@ -299,6 +303,25 @@ async def download_resume(resume_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error downloading resume: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error downloading resume: {str(e)}")
+
+@app.get("/api/resumes/download-file/{filename}", tags=["Resume Management"])
+async def download_resume_by_filename(filename: str):
+    """Download a generated resume file directly by filename"""
+    try:
+        file_path = RESUMES_DIR / filename
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Resume file not found")
+
+        return FileResponse(
+            str(file_path),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename=filename
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading resume file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error downloading resume file: {str(e)}")
 
 @app.delete("/api/resumes/{resume_id}", tags=["Resume Management"])
 async def delete_resume(resume_id: int, db: Session = Depends(get_db)):
