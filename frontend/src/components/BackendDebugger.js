@@ -14,29 +14,53 @@ const BackendDebugger = () => {
         // Run health check
         const checkHealth = async () => {
             try {
-                const isHealthy = await healthCheck();
-                setStatus(isHealthy ? 'healthy' : 'unhealthy');
+                // Test GET request first
+                const healthResponse = await fetch(`${url}/health`, {
+                    method: 'GET',
+                    mode: 'cors',
+                });
                 
-                // Try to get more details
-                try {
-                    const response = await fetch(`${url}/health`);
-                    const data = await response.json();
+                if (healthResponse.ok) {
+                    const data = await healthResponse.json();
+                    setStatus('healthy');
                     setDetails({
-                        status: response.status,
+                        status: healthResponse.status,
                         data: data,
-                        headers: Object.fromEntries(response.headers.entries())
+                        headers: Object.fromEntries(healthResponse.headers.entries()),
+                        getWorks: true
                     });
-                } catch (err) {
+                    
+                    // Test POST request (OPTIONS preflight)
+                    try {
+                        const optionsResponse = await fetch(`${url}/api/generate`, {
+                            method: 'OPTIONS',
+                            mode: 'cors',
+                        });
+                        setDetails(prev => ({
+                            ...prev,
+                            optionsStatus: optionsResponse.status,
+                            postWorks: optionsResponse.ok
+                        }));
+                    } catch (optErr) {
+                        setDetails(prev => ({
+                            ...prev,
+                            postError: optErr.message
+                        }));
+                    }
+                } else {
+                    setStatus('unhealthy');
                     setDetails({
-                        error: err.message,
-                        code: err.code
+                        status: healthResponse.status,
+                        statusText: healthResponse.statusText,
+                        getWorks: false
                     });
                 }
             } catch (error) {
                 setStatus('error');
                 setDetails({
                     error: error.message,
-                    code: error.code
+                    code: error.code,
+                    name: error.name
                 });
             }
         };

@@ -90,36 +90,84 @@ export const resumeAPI = {
   // Primary: generate from uploaded documents + job description
   generate: async (files, jobDescription) => {
     try {
+      console.log('🚀 Starting resume generation...', {
+        filesCount: files.length,
+        apiUrl: API_BASE_URL,
+        fullUrl: `${API_BASE_URL}/api/generate`
+      });
+
       const formData = new FormData();
-      files.forEach(f => formData.append('files', f));
+      files.forEach(f => {
+        console.log('📎 Adding file:', f.name, f.type, f.size);
+        formData.append('files', f);
+      });
       formData.append('job_description', jobDescription);
       
+      // Test backend connectivity first
+      console.log('🔍 Testing backend connectivity...');
+      try {
+        const healthCheck = await fetch(`${API_BASE_URL}/health`, {
+          method: 'GET',
+          mode: 'cors',
+        });
+        console.log('✅ Health check:', healthCheck.status, healthCheck.statusText);
+        if (!healthCheck.ok) {
+          throw new Error(`Backend health check failed: ${healthCheck.status}`);
+        }
+      } catch (healthError) {
+        console.error('❌ Health check failed:', healthError);
+        throw new Error(`Cannot reach backend: ${healthError.message}. Backend may be sleeping or unreachable.`);
+      }
+      
       // Use fetch directly for FormData to avoid axios issues with multipart
-      // This gives us more control over the request
+      console.log('📤 Sending POST request to /api/generate...');
       const response = await fetch(`${API_BASE_URL}/api/generate`, {
         method: 'POST',
         body: formData,
+        mode: 'cors',
+        credentials: 'omit',
         // Don't set Content-Type - browser will set it with boundary
-        credentials: 'omit', // Don't send cookies
+      });
+      
+      console.log('📥 Response received:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries())
       });
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+        const errorText = await response.text();
+        console.error('❌ Response error:', errorText);
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { detail: errorText || `HTTP ${response.status}` };
+        }
         throw new Error(errorData.detail || `Server error: ${response.status}`);
       }
       
-      return await response.json();
+      const result = await response.json();
+      console.log('✅ Generation successful:', result);
+      return result;
     } catch (error) {
       // Enhanced error handling
-      console.error('❌ Generate error:', error);
+      console.error('❌ Generate error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        apiUrl: API_BASE_URL
+      });
       
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        throw new Error('Failed to fetch - check CORS settings and backend availability');
+        throw new Error('Failed to fetch - This usually means CORS is blocking the request or backend is unreachable. Check backend CORS_ORIGINS includes your Vercel domain.');
       }
       
-      if (!error.message || error.message === 'Network Error' || error.message === 'Failed to fetch') {
-        throw new Error('Could not reach the server. Please check your connection and verify REACT_APP_API_URL is set correctly.');
+      if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        throw new Error(`Cannot connect to backend at ${API_BASE_URL}. Backend may be sleeping (Render free tier) or CORS is blocking the request.`);
       }
+      
       throw error;
     }
   },
