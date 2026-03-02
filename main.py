@@ -108,9 +108,14 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+# Allow all origins in development, or specific origins in production
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+# Handle comma-separated list and strip whitespace
+cors_origins_list = [origin.strip() for origin in cors_origins.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000").split(","),
+    allow_origins=cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
