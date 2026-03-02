@@ -6,29 +6,29 @@ Your task is to:
 1. Extract all relevant information from the candidate's uploaded documents (old resumes, LinkedIn exports, cover letters, portfolios, or any other supporting material).
 2. Carefully analyse the job description to identify the key skills, requirements, qualifications, and keywords the employer is looking for.
 3. Produce a tailored, professionally written Australian-style resume that:
-   \u2022 Aligns the candidate's background precisely with the job requirements
-   \u2022 Uses industry-specific keywords from the job description for ATS (Applicant Tracking System) optimisation
-   \u2022 Quantifies achievements with concrete numbers, percentages, or dollar values wherever possible
-   \u2022 Uses strong Australian English action verbs (led, delivered, implemented, drove, achieved, established, managed, reduced, increased, developed, etc.)
-   \u2022 Follows current Australian resume conventions:
+   • Aligns the candidate's background precisely with the job requirements
+   • Uses industry-specific keywords from the job description for ATS (Applicant Tracking System) optimisation
+   • Quantifies achievements with concrete numbers, percentages, or dollar values wherever possible
+   • Uses strong Australian English action verbs (led, delivered, implemented, drove, achieved, established, managed, reduced, increased, developed, etc.)
+   • Follows current Australian resume conventions:
      - Professional summary (not an objective statement)
      - No photo, no date of birth, no references section
-     - Dates in "Month Year \u2013 Month Year" format (e.g. "Jan 2019 \u2013 Mar 2022")
+     - Dates in "Month Year – Month Year" format (e.g. "Jan 2019 – Mar 2022")
      - Location as "City, State" (e.g. "Sydney, NSW")
-   \u2022 Is concise and ideally fits within 2 pages
-   \u2022 Reflects a senior professional tone \u2014 confident, authoritative, achievement-focused
+   • Is concise and ideally fits within 2 pages
+   • Reflects a senior professional tone — confident, authoritative, achievement-focused
 
 STRICT RULES:
-- Extract contact details accurately from the documents \u2014 do NOT invent or guess phone numbers, emails, or addresses
+- Extract contact details accurately from the documents — do NOT invent or guess phone numbers, emails, or addresses
 - If the documents do not contain certain contact information, leave that field as an empty string
 - Do NOT fabricate, invent, or embellish any experience, qualifications, dates, or company names
-- Write a compelling 3\u20135 sentence professional summary specifically tailored to the job description
-- Select 8\u201312 key skills that are the most relevant to the stated job requirements
-- For each work experience entry, write 3\u20135 achievement-focused bullet points
+- Write a compelling 3–5 sentence professional summary specifically tailored to the job description
+- Select 8–12 key skills that are the most relevant to the stated job requirements
+- For each work experience entry, write 3–5 achievement-focused bullet points
 - List education entries in reverse-chronological order (most recent first)
-- Include certifications and awards only if they appear in the candidate\u2019s documents
+- Include certifications and awards only if they appear in the candidate's documents
 
-You MUST respond with ONLY valid JSON \u2014 no prose, no markdown, no code fences, no explanation.
+You MUST respond with ONLY valid JSON — no prose, no markdown, no code fences, no explanation.
 The JSON must strictly follow this exact schema (include every key even if the value is an empty string or empty list):
 
 {
@@ -46,7 +46,7 @@ The JSON must strictly follow this exact schema (include every key even if the v
       "title": "Job Title",
       "company": "Company Name",
       "location": "City, State",
-      "dates": "Month Year \u2013 Month Year",
+      "dates": "Month Year – Month Year",
       "description": "",
       "bullets": [
         "Led a team of X engineers to deliver Y, resulting in Z% improvement in performance.",
@@ -69,19 +69,38 @@ The JSON must strictly follow this exact schema (include every key even if the v
 
 
 def build_generate_prompt(documents_text: str, job_description: str, additional_info: str = "") -> str:
-    """Build the user-facing prompt that includes extracted document text and job description."""
-    return f"""Please create a professional, tailored Australian resume using the information below.
+    """Build the user-facing prompt that includes extracted document text, job description, and optional additional information."""
+    prompt = f"""Please create a professional, tailored Australian resume using the information below.
 
 === CANDIDATE DOCUMENTS ===
 {documents_text}
 
 === JOB DESCRIPTION ===
-{job_description}
+{job_description}"""
+    
+    if additional_info and additional_info.strip():
+        prompt += f"""
+
+=== ADDITIONAL INFORMATION ===
+The candidate has provided the following additional information that should be incorporated into the resume:
+{additional_info.strip()}
+
+This may include:
+- Specific examples of experience relevant to the job
+- Responses to job selection criteria
+- Additional achievements or projects
+- Any other details the candidate wants highlighted"""
+    
+    prompt += """
 
 Instructions:
 - Extract all relevant experience, skills, education, and contact details from the candidate documents above.
 - Tailor the resume specifically to match the skills, keywords, and requirements in the job description.
-- Respond with ONLY the JSON object \u2014 no other text before or after."""
+- Incorporate the additional information provided (if any) to strengthen the resume and better align with the job requirements.
+- Use the additional information to create more targeted bullet points and highlight relevant achievements.
+- Respond with ONLY the JSON object — no other text before or after."""
+    
+    return prompt
 
 
 # ── Legacy prompts (kept for /api/generate-resume wizard endpoint) ──────────
@@ -126,7 +145,7 @@ Work Experience:
   Achievements:
 """
         for bullet in exp.get('bullets', []):
-            prompt += f"  \u2022 {bullet}\n"
+            prompt += f"  • {bullet}\n"
 
     prompt += "\nEducation:\n"
     for edu in candidate_data.get('education', []):
