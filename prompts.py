@@ -5,7 +5,13 @@ SYSTEM_PROMPT_GENERATE = """You are a highly experienced Australian professional
 Your task is to:
 1. Extract all relevant information from the candidate's uploaded documents (old resumes, LinkedIn exports, cover letters, portfolios, or any other supporting material).
 2. Carefully analyse the job description to identify the key skills, requirements, qualifications, and keywords the employer is looking for.
-3. Produce a tailored, professionally written Australian-style resume that:
+3. IMPORTANT: If the candidate provides additional information (responses to selection criteria, specific examples, achievements, etc.), you MUST actively incorporate this information into the resume. Use it to:
+   - Create more targeted and relevant bullet points
+   - Highlight specific achievements and examples
+   - Address selection criteria directly
+   - Strengthen the professional summary
+   - Add relevant skills and experiences that align with the job requirements
+4. Produce a tailored, professionally written Australian-style resume that:
    • Aligns the candidate's background precisely with the job requirements
    • Uses industry-specific keywords from the job description for ATS (Applicant Tracking System) optimisation
    • Quantifies achievements with concrete numbers, percentages, or dollar values wherever possible
@@ -81,23 +87,30 @@ def build_generate_prompt(documents_text: str, job_description: str, additional_
     if additional_info and additional_info.strip():
         prompt += f"""
 
-=== ADDITIONAL INFORMATION ===
-The candidate has provided the following additional information that should be incorporated into the resume:
+=== ADDITIONAL INFORMATION (MUST BE INCORPORATED) ===
+The candidate has provided the following CRITICAL additional information that MUST be actively incorporated into the resume. This information is essential and should be used to:
+
+1. Create specific, targeted bullet points that directly address the job requirements
+2. Highlight achievements and examples that match the selection criteria
+3. Strengthen the professional summary with relevant details
+4. Add or emphasize skills and experiences mentioned in this section
+5. Ensure the resume directly responds to what the employer is looking for
+
+ADDITIONAL INFORMATION PROVIDED BY CANDIDATE:
 {additional_info.strip()}
 
-This may include:
-- Specific examples of experience relevant to the job
-- Responses to job selection criteria
-- Additional achievements or projects
-- Any other details the candidate wants highlighted"""
+IMPORTANT: Do not just reference this information—actively use it to craft compelling bullet points, enhance the professional summary, and ensure the resume directly addresses the job requirements. This information should be woven throughout the resume, not just mentioned once."""
     
     prompt += """
 
 Instructions:
 - Extract all relevant experience, skills, education, and contact details from the candidate documents above.
 - Tailor the resume specifically to match the skills, keywords, and requirements in the job description.
-- Incorporate the additional information provided (if any) to strengthen the resume and better align with the job requirements.
-- Use the additional information to create more targeted bullet points and highlight relevant achievements.
+- CRITICAL: If additional information was provided, you MUST actively incorporate it throughout the resume:
+  * Use specific examples and achievements from the additional information in your bullet points
+  * Reference selection criteria responses in the professional summary and experience sections
+  * Ensure the additional information is woven into the resume naturally, not just added as a separate section
+  * Make the resume directly address what the candidate highlighted in their additional information
 - Respond with ONLY the JSON object — no other text before or after."""
     
     return prompt
