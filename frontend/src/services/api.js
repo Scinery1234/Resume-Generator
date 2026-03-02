@@ -88,7 +88,7 @@ export const authAPI = {
 
 export const resumeAPI = {
   // Primary: generate from uploaded documents + job description + additional info
-  generate: async (files, jobDescription, additionalInfo = '') => {
+  generate: async (files, jobDescription, additionalInfo = '', userId = null) => {
     try {
       console.log('🚀 Starting resume generation...', {
         filesCount: files.length,
@@ -104,6 +104,9 @@ export const resumeAPI = {
       formData.append('job_description', jobDescription);
       if (additionalInfo && additionalInfo.trim()) {
         formData.append('additional_info', additionalInfo.trim());
+      }
+      if (userId) {
+        formData.append('user_id', userId);
       }
       
       // Test backend connectivity first
@@ -211,6 +214,35 @@ export const resumeAPI = {
   
   delete: async (resumeId) => {
     const response = await api.delete(`/api/resumes/${resumeId}`);
+    return response.data;
+  },
+  
+  editWithPrompt: async (resumeId, prompt, userId) => {
+    const formData = new FormData();
+    formData.append('prompt', prompt);
+    formData.append('user_id', userId);
+    const response = await fetch(`${API_BASE_URL}/api/resumes/${resumeId}/edit`, {
+      method: 'POST',
+      body: formData,
+      mode: 'cors',
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+      throw new Error(error.detail || `Server error: ${response.status}`);
+    }
+    return await response.json();
+  },
+  
+  updateInline: async (resumeId, resumeData, userId) => {
+    const response = await api.put(`/api/resumes/${resumeId}/update`, {
+      resume_data: resumeData,
+      user_id: userId,
+    });
+    return response.data;
+  },
+  
+  getPromptInfo: async (userId) => {
+    const response = await api.get(`/api/users/${userId}/prompt-info`);
     return response.data;
   },
 };

@@ -15,6 +15,8 @@ class User(Base):
     skills = Column(Text)
     experience = Column(Text)
     education = Column(Text)
+    membership_tier = Column(String, default='free')  # 'free', 'pro', 'enterprise'
+    prompt_count = Column(Integer, default=0)  # Number of prompts used
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -29,7 +31,7 @@ class User(Base):
 class Resume(Base):
     __tablename__ = 'resumes'
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True)  # Allow null for guest resumes
     name = Column(String, nullable=False)
     file_path = Column(String)
     professional_summary = Column(Text)
@@ -37,5 +39,7 @@ class Resume(Base):
     experience = Column(Text)
     education = Column(Text)
     contact_info = Column(Text)
+    resume_data = Column(Text)  # JSON string of the resume data for editing
+    preview_html = Column(Text)  # Store preview HTML for editing
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -324,6 +324,8 @@ async def generate_from_documents(
     files: List[UploadFile] = File(default=[]),
     job_description: str = Form(...),
     additional_info: str = Form(default=""),
+    user_id: Optional[int] = Form(default=None),  # Optional user ID for logged-in users
+    db: Session = Depends(get_db),
 ):
     """
     Generate a tailored Australian resume from:
@@ -408,6 +410,26 @@ async def generate_from_documents(
     # Build the HTML preview
     preview_html = resume_builder.build_html_preview(resume_data)
 
+    # Save resume to database if user is logged in
+    resume_id = None
+    if user_id:
+        try:
+            resume_record = Resume(
+                user_id=user_id,
+                name=resume_data.get("name", "Untitled Resume"),
+                file_path=str(resume_path),
+                contact_info=json.dumps(resume_data.get("contact", {})),
+                resume_data=json.dumps(resume_data),
+                preview_html=preview_html,
+            )
+            db.add(resume_record)
+            db.commit()
+            db.refresh(resume_record)
+            resume_id = resume_record.id
+        except Exception as e:
+            logger.error(f"Error saving resume to database: {e}")
+            db.rollback()
+
     logger.info("Resume generated: %s (name: %s)", resume_filename, resume_data.get("name", "unknown"))
     return {
         "status": "success",
@@ -415,6 +437,7 @@ async def generate_from_documents(
         "download_url": f"/api/resumes/download-file/{resume_filename}",
         "preview_html": preview_html,
         "data": resume_data,
+        "resume_id": resume_id,  # Include resume_id for editing
     }
 
 
@@ -629,6 +652,148 @@ async def upload_resume(file: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"Error uploading file: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
+
+
+@app.post("/api/resumes/{resume_id}/edit", tags=["Resume Editing"])
+async def edit_resume_with_prompt(
+    resume_id: int,
+    prompt: str = Form(...),
+    user_id: int = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Edit a resume using a text prompt. Checks prompt count limits."""
+    # Get user and check membership
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check prompt limits
+    max_prompts = 10 if user.membership_tier == 'free' else 100 if user.membership_tier == 'pro' else 1000
+    if user.prompt_count >= max_prompts:
+        raise HTTPException(
+            status_code=403,
+            detail=f"You've reached your prompt limit ({max_prompts}). Upgrade to Pro for 10x more prompts!"
+        )
+    
+    # Get resume
+    resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id == user_id).first()
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    
+    if not resume.resume_data:
+        raise HTTPException(status_code=400, detail="Resume data not available for editing")
+    
+    # Parse existing resume data
+    current_data = json.loads(resume.resume_data)
+    
+    # Create edit prompt
+    edit_prompt = f"""You are editing an existing resume. The user wants to make the following change:
+
+USER REQUEST: {prompt}
+
+CURRENT RESUME DATA (JSON):
+{json.dumps(current_data, indent=2)}
+
+Please update the resume JSON to reflect the requested changes. Maintain the same structure and format.
+Return ONLY the updated JSON object — no other text."""
+    
+    if not openai_client:
+        raise HTTPException(status_code=503, detail="OpenAI API not configured")
+    
+    try:
+        response = openai_client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT_GENERATE},
+                {"role": "user", "content": edit_prompt},
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"},
+            timeout=120,
+        )
+        updated_data = json.loads(response.choices[0].message.content)
+        
+        # Update resume
+        resume_builder = ResumeBuilder()
+        resume_filename = f"resume_{uuid.uuid4().hex[:10]}.docx"
+        resume_path = RESUMES_DIR / resume_filename
+        resume_builder.build_word_document(str(resume_path), updated_data)
+        preview_html = resume_builder.build_html_preview(updated_data)
+        
+        resume.resume_data = json.dumps(updated_data)
+        resume.preview_html = preview_html
+        resume.file_path = str(resume_path)
+        resume.updated_at = datetime.utcnow()
+        
+        # Increment prompt count
+        user.prompt_count += 1
+        
+        db.commit()
+        db.refresh(resume)
+        
+        return {
+            "status": "success",
+            "preview_html": preview_html,
+            "data": updated_data,
+            "prompt_count": user.prompt_count,
+            "max_prompts": max_prompts,
+        }
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="AI returned invalid format")
+    except Exception as e:
+        logger.error(f"Error editing resume: {e}")
+        raise HTTPException(status_code=500, detail=f"Error editing resume: {str(e)}")
+
+
+@app.put("/api/resumes/{resume_id}/update", tags=["Resume Editing"])
+async def update_resume_inline(
+    resume_id: int,
+    resume_data: dict,
+    user_id: int,
+    db: Session = Depends(get_db),
+):
+    """Update resume data directly (for inline editing)."""
+    resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id == user_id).first()
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    
+    # Rebuild preview and document
+    resume_builder = ResumeBuilder()
+    resume_filename = f"resume_{uuid.uuid4().hex[:10]}.docx"
+    resume_path = RESUMES_DIR / resume_filename
+    resume_builder.build_word_document(str(resume_path), resume_data)
+    preview_html = resume_builder.build_html_preview(resume_data)
+    
+    resume.resume_data = json.dumps(resume_data)
+    resume.preview_html = preview_html
+    resume.file_path = str(resume_path)
+    resume.updated_at = datetime.utcnow()
+    
+    db.commit()
+    
+    return {
+        "status": "success",
+        "preview_html": preview_html,
+        "data": resume_data,
+    }
+
+
+@app.get("/api/users/{user_id}/prompt-info", tags=["User"])
+async def get_prompt_info(user_id: int, db: Session = Depends(get_db)):
+    """Get user's prompt count and membership tier."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    max_prompts = 10 if user.membership_tier == 'free' else 100 if user.membership_tier == 'pro' else 1000
+    
+    return {
+        "prompt_count": user.prompt_count,
+        "max_prompts": max_prompts,
+        "membership_tier": user.membership_tier,
+        "remaining_prompts": max(0, max_prompts - user.prompt_count),
+    }
+
 
 @app.get("/api/templates", tags=["Templates"])
 async def get_templates():

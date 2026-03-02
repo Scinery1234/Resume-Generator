@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './WizardPage.css';
 import { resumeAPI } from '../services/api';
@@ -20,10 +20,29 @@ function fileIcon(filename) {
 }
 
 // ── Result view ──────────────────────────────────────────────────────────────
-function ResultView({ result, onReset }) {
-    const [downloading, setDownloading]   = useState(false);
+function ResultView({ result, onReset, onUpdate }) {
+    const [downloading, setDownloading] = useState(false);
     const [downloadError, setDownloadError] = useState('');
-
+    const [editPrompt, setEditPrompt] = useState('');
+    const [editing, setEditing] = useState(false);
+    const [editError, setEditError] = useState('');
+    const [promptInfo, setPromptInfo] = useState(null);
+    const [isEditingInline, setIsEditingInline] = useState(false);
+    const [editedData, setEditedData] = useState(result.data);
+    
+    const userId = localStorage.getItem('userId');
+    const token = localStorage.getItem('token');
+    const isGuest = !token || !userId;
+    
+    // Load prompt info if logged in
+    useEffect(() => {
+        if (!isGuest && userId && result.resume_id) {
+            resumeAPI.getPromptInfo(userId)
+                .then(info => setPromptInfo(info))
+                .catch(err => console.error('Failed to load prompt info:', err));
+        }
+    }, [isGuest, userId, result.resume_id]);
+    
     const handleDownload = async () => {
         setDownloading(true);
         setDownloadError('');
@@ -43,6 +62,55 @@ function ResultView({ result, onReset }) {
             setDownloading(false);
         }
     };
+    
+    const handleEditWithPrompt = async () => {
+        if (!editPrompt.trim()) return;
+        if (isGuest) {
+            setEditError('Please log in to edit your resume.');
+            return;
+        }
+        if (!result.resume_id) {
+            setEditError('Resume must be saved to edit. Please log in and generate again.');
+            return;
+        }
+        
+        setEditing(true);
+        setEditError('');
+        try {
+            const response = await resumeAPI.editWithPrompt(result.resume_id, editPrompt, userId);
+            setEditedData(response.data);
+            if (onUpdate) onUpdate(response);
+            setEditPrompt('');
+            setPromptInfo(response);
+        } catch (err) {
+            setEditError(err.message || 'Failed to edit resume. Please try again.');
+        } finally {
+            setEditing(false);
+        }
+    };
+    
+    const handleInlineEdit = async () => {
+        if (isGuest) {
+            setEditError('Please log in to edit your resume.');
+            return;
+        }
+        if (!result.resume_id) {
+            setEditError('Resume must be saved to edit. Please log in and generate again.');
+            return;
+        }
+        
+        setEditing(true);
+        setEditError('');
+        try {
+            const response = await resumeAPI.updateInline(result.resume_id, editedData, userId);
+            if (onUpdate) onUpdate(response);
+        } catch (err) {
+            setEditError(err.message || 'Failed to update resume. Please try again.');
+        } finally {
+            setEditing(false);
+            setIsEditingInline(false);
+        }
+    };
 
     return (
         <div className="gen-result">
@@ -53,15 +121,88 @@ function ResultView({ result, onReset }) {
                     <p>AI-generated and tailored to your job description. Download your .docx below.</p>
                 </div>
             </div>
+            
+            {promptInfo && (
+                <div className="gen-prompt-info">
+                    <span>Prompts used: {promptInfo.prompt_count} / {promptInfo.max_prompts}</span>
+                    {promptInfo.remaining_prompts === 0 && (
+                        <button className="btn-upgrade" onClick={() => window.location.href = '/pricing'}>
+                            Upgrade to Pro (10x prompts)
+                        </button>
+                    )}
+                </div>
+            )}
+            
+            {isGuest && (
+                <div className="gen-guest-notice">
+                    <strong>💡 Want to edit your resume?</strong> Please log in to use AI-powered editing and make inline changes.
+                </div>
+            )}
 
             {result.preview_html && (
                 <div className="gen-preview-wrap">
-                    <iframe
-                        title="Resume Preview"
-                        srcDoc={result.preview_html}
-                        className="gen-preview-frame"
-                        sandbox="allow-same-origin"
-                    />
+                    {isEditingInline ? (
+                        <div className="gen-inline-editor">
+                            <textarea
+                                className="gen-edit-textarea"
+                                value={JSON.stringify(editedData, null, 2)}
+                                onChange={(e) => {
+                                    try {
+                                        setEditedData(JSON.parse(e.target.value));
+                                    } catch {}
+                                }}
+                                rows={20}
+                            />
+                            <div className="gen-edit-actions">
+                                <button className="btn-save" onClick={handleInlineEdit} disabled={editing}>
+                                    {editing ? 'Saving...' : 'Save Changes'}
+                                </button>
+                                <button className="btn-cancel" onClick={() => setIsEditingInline(false)}>
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <iframe
+                            title="Resume Preview"
+                            srcDoc={result.preview_html}
+                            className="gen-preview-frame"
+                            sandbox="allow-same-origin"
+                        />
+                    )}
+                </div>
+            )}
+            
+            {!isGuest && result.resume_id && (
+                <div className="gen-edit-section">
+                    <h3>Edit Your Resume</h3>
+                    <div className="gen-edit-prompt">
+                        <textarea
+                            className="gen-edit-input"
+                            placeholder="Describe how you'd like to change your resume (e.g., 'Make the professional summary more concise', 'Add Python to technical skills', 'Update the job title for the first experience')"
+                            value={editPrompt}
+                            onChange={(e) => setEditPrompt(e.target.value)}
+                            rows={3}
+                            disabled={editing || (promptInfo && promptInfo.remaining_prompts === 0)}
+                        />
+                        <button 
+                            className="btn-edit-prompt" 
+                            onClick={handleEditWithPrompt}
+                            disabled={editing || !editPrompt.trim() || (promptInfo && promptInfo.remaining_prompts === 0)}
+                        >
+                            {editing ? 'Editing...' : '✨ Apply Edit'}
+                        </button>
+                    </div>
+                    <button 
+                        className="btn-edit-inline" 
+                        onClick={() => setIsEditingInline(true)}
+                        disabled={editing}
+                    >
+                        📝 Edit Inline (JSON)
+                    </button>
+                    {editError && (
+                        <div className="gen-error" role="alert">{editError}</div>
+                    )}
                 </div>
             )}
 
@@ -156,6 +297,15 @@ const WizardPage = () => {
 
     // ── Result screen ─────────────────────────────────────────────────────────
     if (result) {
+        const handleResultUpdate = (updatedResult) => {
+            setResult({
+                ...result,
+                preview_html: updatedResult.preview_html,
+                data: updatedResult.data,
+                prompt_count: updatedResult.prompt_count,
+            });
+        };
+        
         return (
             <div className="gen-page">
                 <nav className="gen-nav">
@@ -163,7 +313,7 @@ const WizardPage = () => {
                     <span className="gen-nav__logo">ResumeGen</span>
                     <span />
                 </nav>
-                <ResultView result={result} onReset={() => setResult(null)} />
+                <ResultView result={result} onReset={() => setResult(null)} onUpdate={handleResultUpdate} />
             </div>
         );
     }
