@@ -35,7 +35,11 @@ const AuthPage = () => {
                 navigate('/my-resumes');
             }
         } catch (err) {
-            setError(err.response?.data?.detail || 'An error occurred. Please try again.');
+            const errorMessage = err.response?.data?.detail || 
+                                err.message || 
+                                'An error occurred. Please try again.';
+            setError(errorMessage);
+            console.error('Auth error:', err);
         } finally {
             setLoading(false);
         }

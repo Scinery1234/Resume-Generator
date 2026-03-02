@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { resumeAPI } from '../services/api';
+import { downloadBlob } from '../utils/fileDownload';
 import './MyResumesPage.css';
 
 const MyResumesPage = () => {
@@ -38,29 +39,20 @@ const MyResumesPage = () => {
 
     const handleDownload = async (resume) => {
         try {
+            let blob, filename;
             if (resume.filename) {
-                const blob = await resumeAPI.downloadByFilename(resume.filename);
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = resume.filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                blob = await resumeAPI.downloadByFilename(resume.filename);
+                filename = resume.filename;
             } else if (resume.id) {
-                const blob = await resumeAPI.download(resume.id);
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = resume.name || 'resume.docx';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                blob = await resumeAPI.download(resume.id);
+                filename = resume.name || 'resume.docx';
+            } else {
+                setError('No download source available for this resume');
+                return;
             }
+            downloadBlob(blob, filename);
         } catch (err) {
-            alert('Download failed. Please try again.');
+            setError(err.message || 'Download failed. Please try again.');
         }
     };
 

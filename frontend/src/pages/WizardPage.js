@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './WizardPage.css';
 import { resumeAPI } from '../services/api';
+import { downloadBlob } from '../utils/fileDownload';
 
 const MAX_FILES = 5;
 const ACCEPTED_TYPES = ['.pdf', '.docx', '.doc', '.txt'];
@@ -52,16 +53,9 @@ function ResultView({ result, onReset, onUpdate }) {
         setDownloadError('');
         try {
             const blob = await resumeAPI.downloadByFilename(result.filename);
-            const url  = URL.createObjectURL(blob);
-            const a    = document.createElement('a');
-            a.href     = url;
-            a.download = result.filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        } catch {
-            setDownloadError('Download failed. Please try again.');
+            downloadBlob(blob, result.filename);
+        } catch (err) {
+            setDownloadError(err.message || 'Download failed. Please try again.');
         } finally {
             setDownloading(false);
         }
@@ -125,7 +119,11 @@ function ResultView({ result, onReset, onUpdate }) {
             }
             setIsEditingInline(false);
         } catch (err) {
-            setEditError(err.message || 'Failed to update resume. Please try again.');
+            const errorMessage = err.response?.data?.detail || 
+                                err.message || 
+                                'Failed to update resume. Please try again.';
+            setEditError(errorMessage);
+            console.error('Inline edit error:', err);
         } finally {
             setEditing(false);
         }

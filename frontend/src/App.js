@@ -5,21 +5,24 @@ import AuthPage from './pages/AuthPage';
 import WizardPage from './pages/WizardPage';
 import MyResumesPage from './pages/MyResumesPage';
 import BackendDebugger from './components/BackendDebugger';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const App = () => {
     // Show debugger in production if API URL is set (helps diagnose issues)
     const showDebugger = process.env.NODE_ENV === 'production' && process.env.REACT_APP_API_URL;
     
     return (
-        <Router>
-            <Routes>
-                <Route path='/' element={<LandingPage />} />
-                <Route path='/auth' element={<AuthPage />} />
-                <Route path='/wizard' element={<WizardPage />} />
-                <Route path='/my-resumes' element={<MyResumesPage />} />
-            </Routes>
-            {showDebugger && <BackendDebugger />}
-        </Router>
+        <ErrorBoundary>
+            <Router>
+                <Routes>
+                    <Route path='/' element={<LandingPage />} />
+                    <Route path='/auth' element={<AuthPage />} />
+                    <Route path='/wizard' element={<WizardPage />} />
+                    <Route path='/my-resumes' element={<MyResumesPage />} />
+                </Routes>
+                {showDebugger && <BackendDebugger />}
+            </Router>
+        </ErrorBoundary>
     );
 };
 

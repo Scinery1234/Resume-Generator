@@ -36,6 +36,10 @@ else:
         SQLALCHEMY_DATABASE_URL,
         pool_pre_ping=True,  # Verify connections before using them
         pool_recycle=300,    # Recycle connections after 5 minutes
+        pool_size=5,         # Number of connections to maintain
+        max_overflow=10,     # Maximum overflow connections
+        pool_timeout=30,     # Timeout for getting connection from pool
+        echo=False,          # Set to True for SQL query logging
     )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -44,10 +48,22 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def init_db():
     Base.metadata.create_all(bind=engine)
 
-# Dependency to get database session
+# Dependency to get database session with retry logic
 def get_db():
-    db = SessionLocal()  
+    db = SessionLocal()
     try:
+        # Test the connection first
+        db.execute("SELECT 1")
         yield db
+    except Exception as e:
+        # If connection fails, close and retry once
+        db.close()
+        logger = __import__('logging').getLogger(__name__)
+        logger.warning(f"Database connection failed, retrying: {e}")
+        db = SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
     finally:
         db.close()

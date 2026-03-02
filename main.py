@@ -17,6 +17,11 @@ from database import get_db, init_db
 from models import User, Resume
 from doc_builder import ResumeBuilder
 from prompts import SYSTEM_PROMPT_DRAFT, SYSTEM_PROMPT_GENERATE, create_resume_prompt, build_generate_prompt
+from utils import (
+    sanitize_filename, validate_file_extension, get_max_prompts_for_tier,
+    handle_database_error, standardize_response, validate_user_id,
+    MAX_FILES, MAX_FILE_SIZE, ALLOWED_EXTENSIONS
+)
 import uuid
 
 # Configure logging
@@ -138,8 +143,7 @@ UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./uploads"))
 RESUMES_DIR = Path(os.getenv("RESUMES_DIR", "./resumes"))
 UPLOAD_DIR.mkdir(exist_ok=True)
 RESUMES_DIR.mkdir(exist_ok=True)
-ALLOWED_EXTENSIONS = {'.pdf', '.doc', '.docx', '.txt', '.jpg', '.jpeg', '.png'}
-MAX_FILE_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", 52428800))
+# Note: MAX_FILES, MAX_FILE_SIZE, ALLOWED_EXTENSIONS are now in utils.py
 
 # Pydantic Models
 class ContactInfo(BaseModel):
@@ -257,12 +261,11 @@ async def login(login_data: UserLogin, db: Session = Depends(get_db)):
         if not user or not user.verify_password(login_data.password):
             raise HTTPException(status_code=401, detail="Invalid email or password")
         
-        return {
-            "status": "success",
+        return standardize_response({
             "message": "Login successful",
             "user_id": user.id,
             "token": str(user.id)  # Simplified - use JWT in production
-        }
+        })
     except HTTPException:
         raise
     except Exception as e:
@@ -414,7 +417,9 @@ async def generate_from_documents(
     # Build the .docx
     resume_builder = ResumeBuilder()
     resume_filename = f"resume_{uuid.uuid4().hex[:10]}.docx"
-    resume_path = RESUMES_DIR / resume_filename
+    # Sanitize filename (though UUID should be safe, this is defensive)
+    safe_filename = sanitize_filename(resume_filename)
+    resume_path = RESUMES_DIR / safe_filename
     resume_builder.build_word_document(str(resume_path), resume_data)
 
     # Build the HTML preview
@@ -440,15 +445,14 @@ async def generate_from_documents(
             logger.error(f"Error saving resume to database: {e}")
             db.rollback()
 
-    logger.info("Resume generated: %s (name: %s)", resume_filename, resume_data.get("name", "unknown"))
-    return {
-        "status": "success",
-        "filename": resume_filename,
-        "download_url": f"/api/resumes/download-file/{resume_filename}",
+    logger.info("Resume generated: %s (name: %s)", safe_filename, resume_data.get("name", "unknown"))
+    return standardize_response({
+        "filename": safe_filename,
+        "download_url": f"/api/resumes/download-file/{safe_filename}",
         "preview_html": preview_html,
         "data": resume_data,
         "resume_id": resume_id,  # Include resume_id for editing
-    }
+    })
 
 
 # ── Legacy wizard endpoint (kept for backward compatibility) ──────────────────
@@ -550,23 +554,44 @@ async def preview_resume(candidate: CandidateInput):
 @app.get("/api/resumes", tags=["Resume Management"])
 async def get_user_resumes(user_id: Optional[int] = None, db: Session = Depends(get_db)):
     """Get all resumes for a user"""
-    try:
-        resumes = db.query(Resume).filter(Resume.user_id == user_id).all()
-        return {
-            "status": "success",
-            "resumes": [
-                {
-                    "id": r.id,
-                    "name": r.name,
-                    "created_at": r.created_at.isoformat(),
-                    "file_path": r.file_path
-                }
-                for r in resumes
-            ]
-        }
-    except Exception as e:
-        logger.error(f"Error fetching resumes: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error fetching resumes: {str(e)}")
+    import time
+    max_retries = 3
+    retry_delay = 0.5
+    
+    # Validate user_id if provided
+    if user_id is not None and not validate_user_id(user_id):
+        raise HTTPException(status_code=400, detail="Invalid user_id")
+    
+    for attempt in range(max_retries):
+        try:
+            resumes = db.query(Resume).filter(Resume.user_id == user_id).all()
+            return standardize_response({
+                "resumes": [
+                    {
+                        "id": r.id,
+                        "name": r.name,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                        "file_path": r.file_path,
+                        "contact_info": r.contact_info,
+                        "filename": Path(r.file_path).name if r.file_path else None,
+                    }
+                    for r in resumes
+                ]
+            })
+        except Exception as e:
+            error_str = str(e)
+            if "SSL connection" in error_str or "closed unexpectedly" in error_str:
+                if attempt < max_retries - 1:
+                    logger.warning(f"SSL connection error (attempt {attempt + 1}/{max_retries}), retrying...")
+                    time.sleep(retry_delay * (attempt + 1))
+                    db.rollback()
+                    continue
+                else:
+                    raise handle_database_error(e, "fetching resumes")
+            else:
+                raise handle_database_error(e, "fetching resumes")
+    
+    raise HTTPException(status_code=500, detail="Failed to fetch resumes after retries")
 
 @app.get("/api/resumes/{resume_id}/download", tags=["Resume Management"])
 async def download_resume(resume_id: int, db: Session = Depends(get_db)):
@@ -594,20 +619,29 @@ async def download_resume(resume_id: int, db: Session = Depends(get_db)):
 async def download_resume_by_filename(filename: str):
     """Download a generated resume file directly by filename"""
     try:
-        file_path = RESUMES_DIR / filename
+        # Sanitize filename to prevent directory traversal
+        safe_filename = sanitize_filename(filename)
+        file_path = RESUMES_DIR / safe_filename
+        
+        # Additional security: ensure file is within RESUMES_DIR
+        try:
+            file_path.resolve().relative_to(RESUMES_DIR.resolve())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid file path")
+        
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Resume file not found")
 
         return FileResponse(
             str(file_path),
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            filename=filename
+            filename=safe_filename
         )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error downloading resume file: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error downloading resume file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error downloading resume file")
 
 @app.delete("/api/resumes/{resume_id}", tags=["Resume Management"])
 async def delete_resume(resume_id: int, db: Session = Depends(get_db)):
@@ -678,7 +712,7 @@ async def edit_resume_with_prompt(
         raise HTTPException(status_code=404, detail="User not found")
     
     # Check prompt limits
-    max_prompts = 10 if user.membership_tier == 'free' else 100 if user.membership_tier == 'pro' else 1000
+    max_prompts = get_max_prompts_for_tier(user.membership_tier)
     if user.prompt_count >= max_prompts:
         raise HTTPException(
             status_code=403,
@@ -771,7 +805,8 @@ async def update_resume_inline(
     # Rebuild preview and document
     resume_builder = ResumeBuilder()
     resume_filename = f"resume_{uuid.uuid4().hex[:10]}.docx"
-    resume_path = RESUMES_DIR / resume_filename
+    safe_filename = sanitize_filename(resume_filename)
+    resume_path = RESUMES_DIR / safe_filename
     resume_builder.build_word_document(str(resume_path), resume_data)
     preview_html = resume_builder.build_html_preview(resume_data)
     
@@ -782,11 +817,10 @@ async def update_resume_inline(
     
     db.commit()
     
-    return {
-        "status": "success",
+    return standardize_response({
         "preview_html": preview_html,
         "data": resume_data,
-    }
+    })
 
 
 @app.get("/api/users/{user_id}/prompt-info", tags=["User"])
