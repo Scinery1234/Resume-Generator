@@ -94,25 +94,31 @@ export const resumeAPI = {
       files.forEach(f => formData.append('files', f));
       formData.append('job_description', jobDescription);
       
-      // Don't set Content-Type header - let browser set it with boundary
-      // This is critical for multipart/form-data requests
-      const response = await api.post('/api/generate', formData, {
-        timeout: 180000, // 3 minutes for AI generation
-        headers: {
-          // Let axios/browser set Content-Type with boundary for multipart
-        },
+      // Use fetch directly for FormData to avoid axios issues with multipart
+      // This gives us more control over the request
+      const response = await fetch(`${API_BASE_URL}/api/generate`, {
+        method: 'POST',
+        body: formData,
+        // Don't set Content-Type - browser will set it with boundary
+        credentials: 'omit', // Don't send cookies
       });
       
-      // Check for error responses
-      if (response.status >= 400) {
-        throw new Error(response.data?.detail || `Server error: ${response.status}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+        throw new Error(errorData.detail || `Server error: ${response.status}`);
       }
       
-      return response.data;
+      return await response.json();
     } catch (error) {
-      // Re-throw with enhanced error message if not already set
-      if (!error.message || error.message === 'Network Error') {
-        throw new Error('Could not reach the server. Please check your connection and try again.');
+      // Enhanced error handling
+      console.error('❌ Generate error:', error);
+      
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Failed to fetch - check CORS settings and backend availability');
+      }
+      
+      if (!error.message || error.message === 'Network Error' || error.message === 'Failed to fetch') {
+        throw new Error('Could not reach the server. Please check your connection and verify REACT_APP_API_URL is set correctly.');
       }
       throw error;
     }
