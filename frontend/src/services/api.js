@@ -87,8 +87,8 @@ export const authAPI = {
 };
 
 export const resumeAPI = {
-  // Primary: generate from uploaded documents + job description
-  generate: async (files, jobDescription) => {
+  // Primary: generate from uploaded documents + job description + additional info
+  generate: async (files, jobDescription, additionalInfo = '') => {
     try {
       console.log('🚀 Starting resume generation...', {
         filesCount: files.length,
@@ -102,6 +102,9 @@ export const resumeAPI = {
         formData.append('files', f);
       });
       formData.append('job_description', jobDescription);
+      if (additionalInfo && additionalInfo.trim()) {
+        formData.append('additional_info', additionalInfo.trim());
+      }
       
       // Test backend connectivity first
       console.log('🔍 Testing backend connectivity...');

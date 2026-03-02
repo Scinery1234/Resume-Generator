@@ -86,6 +86,7 @@ const WizardPage = () => {
     const fileInputRef  = useRef(null);
     const [files, setFiles]             = useState([]);
     const [jobDesc, setJobDesc]         = useState('');
+    const [additionalInfo, setAdditionalInfo] = useState('');
     const [isDragging, setIsDragging]   = useState(false);
     const [loading, setLoading]         = useState(false);
     const [error, setError]             = useState('');
@@ -129,7 +130,7 @@ const WizardPage = () => {
         setLoading(true);
         setError(''); // Clear previous errors
         try {
-            const data = await resumeAPI.generate(files, jobDesc);
+            const data = await resumeAPI.generate(files, jobDesc, additionalInfo);
             setResult(data);
         } catch (err) {
             // Use the enhanced error message from the API interceptor
@@ -272,6 +273,25 @@ const WizardPage = () => {
                         qualifications — for the most targeted resume.
                     </p>
                 </div>
+            </div>
+
+            {/* Additional Information Panel */}
+            <div className="gen-panel gen-panel--full">
+                <h2 className="gen-panel__title">
+                    <span className="gen-panel__icon">📝</span>
+                    Additional Information
+                    <span className="gen-panel__hint">optional</span>
+                </h2>
+                <textarea
+                    className="gen-jd-textarea"
+                    placeholder="Provide any additional information that will help tailor your resume: responses to job criteria, specific examples of experience relevant to the role, achievements, projects, or any other details you'd like to highlight..."
+                    value={additionalInfo}
+                    onChange={e => setAdditionalInfo(e.target.value)}
+                    rows={8}
+                />
+                <p className="gen-panel__tip">
+                    Tip: Include specific examples, achievements, or responses to selection criteria that directly relate to the job description.
+                </p>
             </div>
 
             {/* Error */}

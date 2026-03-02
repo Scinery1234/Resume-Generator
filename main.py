@@ -323,11 +323,13 @@ async def extract_text_from_upload(file: UploadFile) -> str:
 async def generate_from_documents(
     files: List[UploadFile] = File(default=[]),
     job_description: str = Form(...),
+    additional_info: str = Form(default=""),
 ):
     """
     Generate a tailored Australian resume from:
     - Up to 5 uploaded supporting documents (old resumes, LinkedIn exports, etc.)
     - A pasted job description
+    - Optional additional information (responses to criteria, specific examples, etc.)
 
     The AI extracts all candidate information from the documents and tailors
     the resume to match the requirements of the provided job description.
@@ -372,7 +374,9 @@ async def generate_from_documents(
         )
 
     documents_text = "\n\n".join(doc_parts)
-    user_prompt = build_generate_prompt(documents_text, job_description)
+    # Include additional info if provided
+    additional_info_text = additional_info.strip() if additional_info else ""
+    user_prompt = build_generate_prompt(documents_text, job_description, additional_info_text)
 
     # Call OpenAI to generate the resume JSON
     try:
