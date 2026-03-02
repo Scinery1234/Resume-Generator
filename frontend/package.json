@@ -23,6 +23,10 @@
     "react-scripts": "5.0.1"
   },
   "proxy": "http://localhost:8000",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
   "browserslist": {
     "production": [
       ">0.2%",
