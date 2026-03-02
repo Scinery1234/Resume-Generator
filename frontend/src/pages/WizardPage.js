@@ -442,7 +442,7 @@ const WizardPage = () => {
                         placeholder="Paste the full job description here. The AI will tailor your resume specifically to match this role's requirements, keywords, and responsibilities."
                         value={jobDesc}
                         onChange={e => setJobDesc(e.target.value)}
-                        rows={18}
+                        rows={12}
                     />
                     <p className="gen-panel__tip">
                         Tip: include the complete posting — responsibilities, requirements, and preferred
@@ -463,7 +463,7 @@ const WizardPage = () => {
                     placeholder="Provide any additional information that will help tailor your resume: responses to job criteria, specific examples of experience relevant to the role, achievements, projects, or any other details you'd like to highlight..."
                     value={additionalInfo}
                     onChange={e => setAdditionalInfo(e.target.value)}
-                    rows={8}
+                    rows={6}
                 />
                 <p className="gen-panel__tip">
                     Tip: Include specific examples, achievements, or responses to selection criteria that directly relate to the job description.

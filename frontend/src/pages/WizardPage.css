@@ -71,7 +71,7 @@
 .gen-panel--full {
     grid-column: 1 / -1;
     max-width: 800px;
-    margin: 0 auto;
+    margin: 32px auto 0;
 }
 
 @media (max-width: 768px) {
@@ -206,6 +206,8 @@
     resize: vertical;
     transition: border-color 0.15s;
     background: #f8fafc;
+    max-height: 400px;
+    overflow-y: auto;
 }
 .gen-jd-textarea:focus {
     outline: none;
