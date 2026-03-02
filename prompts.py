@@ -33,6 +33,7 @@ STRICT RULES:
 - For each work experience entry, write 3–5 achievement-focused bullet points
 - List education entries in reverse-chronological order (most recent first)
 - Include certifications and awards only if they appear in the candidate's documents
+- CRITICAL: If additional information is provided by the candidate, you MUST actively incorporate it throughout the resume. Use specific examples, achievements, and details from the additional information to create targeted bullet points and strengthen the professional summary. Do not ignore or minimize this information—it is essential for tailoring the resume to the job requirements.
 
 You MUST respond with ONLY valid JSON — no prose, no markdown, no code fences, no explanation.
 The JSON must strictly follow this exact schema (include every key even if the value is an empty string or empty list):
