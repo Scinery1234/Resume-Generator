@@ -29,8 +29,10 @@ const AuthPage = () => {
                 // Store token and user ID
                 localStorage.setItem('token', response.token);
                 localStorage.setItem('userId', response.user_id);
-                // Redirect to wizard
-                navigate('/wizard');
+                // Trigger storage event so other components update
+                window.dispatchEvent(new Event('storage'));
+                // Redirect to my resumes page
+                navigate('/my-resumes');
             }
         } catch (err) {
             setError(err.response?.data?.detail || 'An error occurred. Please try again.');

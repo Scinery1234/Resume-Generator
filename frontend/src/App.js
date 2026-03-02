@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
 import WizardPage from './pages/WizardPage';
+import MyResumesPage from './pages/MyResumesPage';
 import DiagnosticPage from './pages/DiagnosticPage';
 import BackendDebugger from './components/BackendDebugger';
 
@@ -16,6 +17,7 @@ const App = () => {
                 <Route path='/' element={<LandingPage />} />
                 <Route path='/auth' element={<AuthPage />} />
                 <Route path='/wizard' element={<WizardPage />} />
+                <Route path='/my-resumes' element={<MyResumesPage />} />
                 <Route path='/diagnostic' element={<DiagnosticPage />} />
             </Routes>
             {showDebugger && <BackendDebugger />}

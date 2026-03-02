@@ -1,13 +1,34 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './LandingPage.css';
 
 const LandingPage = () => {
     const navigate = useNavigate();
-    const token = localStorage.getItem('token');
+    const [token, setToken] = useState(localStorage.getItem('token'));
+
+    // Listen for storage changes to update auth state
+    useEffect(() => {
+        const handleStorageChange = () => {
+            setToken(localStorage.getItem('token'));
+        };
+        window.addEventListener('storage', handleStorageChange);
+        // Also check on mount and periodically
+        const interval = setInterval(() => {
+            const currentToken = localStorage.getItem('token');
+            if (currentToken !== token) {
+                setToken(currentToken);
+            }
+        }, 1000);
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+            clearInterval(interval);
+        };
+    }, [token]);
 
     // "Get Started" always goes straight to the wizard — no account required.
     const handleGetStarted = () => navigate('/wizard');
+    
+    const handleMyResumes = () => navigate('/my-resumes');
 
     return (
         <div className="lp">
@@ -34,7 +55,7 @@ const LandingPage = () => {
                     </ul>
                     <button
                         className="btn-primary lp-nav__cta"
-                        onClick={() => navigate(token ? '/wizard' : '/auth')}
+                        onClick={() => token ? handleMyResumes() : navigate('/auth')}
                     >
                         {token ? 'My Resumes' : 'Sign In'}
                     </button>
