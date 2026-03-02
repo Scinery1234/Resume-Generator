@@ -68,6 +68,10 @@
     box-sizing: border-box;
 }
 
+.gen-panel--full {
+    grid-column: 1 / -1;
+}
+
 @media (max-width: 768px) {
     .gen-panels { grid-template-columns: 1fr; }
     .gen-hero h1 { font-size: 1.5rem; }

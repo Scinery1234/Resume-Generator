@@ -68,7 +68,7 @@ The JSON must strictly follow this exact schema (include every key even if the v
 }"""
 
 
-def build_generate_prompt(documents_text: str, job_description: str) -> str:
+def build_generate_prompt(documents_text: str, job_description: str, additional_info: str = "") -> str:
     """Build the user-facing prompt that includes extracted document text and job description."""
     return f"""Please create a professional, tailored Australian resume using the information below.
 
