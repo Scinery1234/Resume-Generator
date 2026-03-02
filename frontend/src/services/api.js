@@ -10,6 +10,10 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // Add error handling
+  validateStatus: function (status) {
+    return status < 500; // Don't throw for 4xx errors
+  },
 });
 
 // Add token to requests if available
@@ -20,6 +24,22 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Add response interceptor for better error handling
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Enhanced error handling
+    if (error.code === 'ECONNABORTED') {
+      error.message = 'Request timeout - the server may be processing. Please try again.';
+    } else if (error.code === 'ERR_NETWORK' || !error.response) {
+      error.message = 'Could not reach the server. Please check your connection and try again.';
+    } else if (error.response?.status === 503) {
+      error.message = error.response?.data?.detail || 'Service temporarily unavailable. Please try again.';
+    }
+    return Promise.reject(error);
+  }
+);
 
 export const authAPI = {
   signup: async (name, email, password) => {
@@ -36,13 +56,28 @@ export const authAPI = {
 export const resumeAPI = {
   // Primary: generate from uploaded documents + job description
   generate: async (files, jobDescription) => {
-    const formData = new FormData();
-    files.forEach(f => formData.append('files', f));
-    formData.append('job_description', jobDescription);
-    const response = await api.post('/api/generate', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return response.data;
+    try {
+      const formData = new FormData();
+      files.forEach(f => formData.append('files', f));
+      formData.append('job_description', jobDescription);
+      const response = await api.post('/api/generate', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 180000, // 3 minutes for AI generation
+      });
+      
+      // Check for error responses
+      if (response.status >= 400) {
+        throw new Error(response.data?.detail || `Server error: ${response.status}`);
+      }
+      
+      return response.data;
+    } catch (error) {
+      // Re-throw with enhanced error message if not already set
+      if (!error.message || error.message === 'Network Error') {
+        throw new Error('Could not reach the server. Please check your connection and try again.');
+      }
+      throw error;
+    }
   },
 
   // Legacy: generate from structured candidate data (wizard)
@@ -90,6 +125,16 @@ export const templateAPI = {
     const response = await api.get('/api/templates');
     return response.data;
   },
+};
+
+// Health check utility
+export const healthCheck = async () => {
+  try {
+    const response = await api.get('/health', { timeout: 5000 });
+    return response.status === 200;
+  } catch (error) {
+    return false;
+  }
 };
 
 export default api;

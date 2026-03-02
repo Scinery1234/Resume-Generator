@@ -127,19 +127,27 @@ const WizardPage = () => {
         }
 
         setLoading(true);
+        setError(''); // Clear previous errors
         try {
             const data = await resumeAPI.generate(files, jobDesc);
             setResult(data);
         } catch (err) {
-            let msg;
-            if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-                msg = 'The request timed out. The server may be starting up — please wait a moment and try again.';
-            } else if (!err.response) {
-                msg = 'Could not reach the server. Please check your connection and try again.';
-            } else {
-                msg = err.response?.data?.detail || 'Generation failed. Please try again.';
+            // Use the enhanced error message from the API interceptor
+            let msg = err.message || 'Generation failed. Please try again.';
+            
+            // Additional specific error handling
+            if (err.response?.status === 503) {
+                msg = 'OpenAI API key is not configured. Please contact the administrator.';
+            } else if (err.response?.status === 400) {
+                msg = err.response?.data?.detail || msg;
+            } else if (err.response?.status >= 500) {
+                msg = 'Server error occurred. Please try again later.';
+            } else if (!err.response && !err.message?.includes('Could not reach')) {
+                msg = 'Could not reach the server. Please ensure the backend is running on http://localhost:8000';
             }
+            
             setError(msg);
+            console.error('Resume generation error:', err);
         } finally {
             setLoading(false);
         }
