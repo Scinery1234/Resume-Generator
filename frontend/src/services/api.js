@@ -4,6 +4,17 @@ import axios from 'axios';
 // In production set REACT_APP_API_URL to the backend's public URL.
 const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
+// Log API URL in development to help debug
+if (process.env.NODE_ENV === 'development') {
+  console.log('API Base URL:', API_BASE_URL || 'Using proxy (package.json)');
+}
+
+// Warn if API URL is not set in production
+if (process.env.NODE_ENV === 'production' && !API_BASE_URL) {
+  console.error('⚠️ REACT_APP_API_URL is not set! API calls will fail.');
+  console.error('Set REACT_APP_API_URL in Vercel Environment Variables.');
+}
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 180000, // 3 minutes — covers Render cold-start + OpenAI generation time
