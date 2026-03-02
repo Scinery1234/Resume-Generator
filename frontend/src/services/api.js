@@ -4,13 +4,9 @@ import axios from 'axios';
 // In production set REACT_APP_API_URL to the backend's public URL.
 const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
-// Log API URL in development to help debug
-if (process.env.NODE_ENV === 'development') {
-  console.log('API Base URL:', API_BASE_URL || 'Using proxy (package.json)');
-}
-
-// Warn if API URL is not set in production
-if (process.env.NODE_ENV === 'production' && !API_BASE_URL) {
+// Log API URL to help debug (in both dev and prod)
+console.log('🔗 API Base URL:', API_BASE_URL || '(empty - using proxy in dev)');
+if (!API_BASE_URL && process.env.NODE_ENV === 'production') {
   console.error('⚠️ REACT_APP_API_URL is not set! API calls will fail.');
   console.error('Set REACT_APP_API_URL in Vercel Environment Variables.');
 }
@@ -40,13 +36,25 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Enhanced error handling
+    // Enhanced error handling with detailed logging
+    console.error('❌ API Error:', {
+      message: error.message,
+      code: error.code,
+      status: error.response?.status,
+      url: error.config?.url,
+      baseURL: error.config?.baseURL,
+      fullURL: error.config?.baseURL + error.config?.url
+    });
+    
     if (error.code === 'ECONNABORTED') {
       error.message = 'Request timeout - the server may be processing. Please try again.';
     } else if (error.code === 'ERR_NETWORK' || !error.response) {
-      error.message = 'Could not reach the server. Please check your connection and try again.';
+      const baseURL = error.config?.baseURL || API_BASE_URL;
+      error.message = `Could not reach the server at ${baseURL}. Please check your connection and verify REACT_APP_API_URL is set correctly.`;
     } else if (error.response?.status === 503) {
       error.message = error.response?.data?.detail || 'Service temporarily unavailable. Please try again.';
+    } else if (error.response?.status === 0) {
+      error.message = 'CORS error or server unreachable. Check backend CORS settings and ensure backend is running.';
     }
     return Promise.reject(error);
   }
@@ -138,12 +146,19 @@ export const templateAPI = {
   },
 };
 
-// Health check utility
+// Health check utility with detailed logging
 export const healthCheck = async () => {
   try {
-    const response = await api.get('/health', { timeout: 5000 });
+    console.log('🏥 Checking backend health at:', API_BASE_URL + '/health');
+    const response = await api.get('/health', { timeout: 10000 });
+    console.log('✅ Backend health check passed:', response.status);
     return response.status === 200;
   } catch (error) {
+    console.error('❌ Backend health check failed:', {
+      message: error.message,
+      code: error.code,
+      url: API_BASE_URL + '/health'
+    });
     return false;
   }
 };

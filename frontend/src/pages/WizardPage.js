@@ -1,7 +1,7 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './WizardPage.css';
-import { resumeAPI } from '../services/api';
+import { resumeAPI, healthCheck } from '../services/api';
 
 const MAX_FILES = 5;
 const ACCEPTED_TYPES = ['.pdf', '.docx', '.doc', '.txt'];
@@ -184,6 +184,18 @@ const WizardPage = () => {
                     Upload up to {MAX_FILES} supporting documents (old resumes, LinkedIn exports, cover
                     letters) and paste the job description — our AI does the rest in seconds.
                 </p>
+                {backendStatus === false && (
+                    <div style={{ 
+                        marginTop: '1rem', 
+                        padding: '0.75rem', 
+                        background: '#fee', 
+                        border: '1px solid #fcc',
+                        borderRadius: '4px',
+                        color: '#c33'
+                    }}>
+                        ⚠️ Backend connection issue detected. Please check console for details.
+                    </div>
+                )}
             </div>
 
             {/* Main panels */}
