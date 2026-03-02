@@ -22,8 +22,21 @@ if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
         SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
     )
 else:
-    # PostgreSQL (for Render)
-    engine = create_engine(SQLALCHEMY_DATABASE_URL)
+    # PostgreSQL (for Render) - requires SSL connection
+    # Render's PostgreSQL requires SSL, but we can use sslmode=require
+    # Add SSL configuration to connection string if not already present
+    if "sslmode" not in SQLALCHEMY_DATABASE_URL:
+        # Add sslmode=require to the connection string
+        if "?" in SQLALCHEMY_DATABASE_URL:
+            SQLALCHEMY_DATABASE_URL += "&sslmode=require"
+        else:
+            SQLALCHEMY_DATABASE_URL += "?sslmode=require"
+    
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL,
+        pool_pre_ping=True,  # Verify connections before using them
+        pool_recycle=300,    # Recycle connections after 5 minutes
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

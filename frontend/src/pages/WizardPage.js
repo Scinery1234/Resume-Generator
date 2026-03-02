@@ -1,7 +1,7 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './WizardPage.css';
-import { resumeAPI, healthCheck } from '../services/api';
+import { resumeAPI } from '../services/api';
 
 const MAX_FILES = 5;
 const ACCEPTED_TYPES = ['.pdf', '.docx', '.doc', '.txt'];
