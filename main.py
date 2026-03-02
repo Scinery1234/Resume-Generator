@@ -367,6 +367,7 @@ async def generate_from_documents(
             ],
             temperature=0.3,
             response_format={"type": "json_object"},
+            timeout=120,
         )
         resume_json_str = response.choices[0].message.content
         resume_data = json.loads(resume_json_str)

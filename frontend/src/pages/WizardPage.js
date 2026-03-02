@@ -131,7 +131,14 @@ const WizardPage = () => {
             const data = await resumeAPI.generate(files, jobDesc);
             setResult(data);
         } catch (err) {
-            const msg = err.response?.data?.detail || 'Generation failed. Please try again.';
+            let msg;
+            if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+                msg = 'The request timed out. The server may be starting up — please wait a moment and try again.';
+            } else if (!err.response) {
+                msg = 'Could not reach the server. Please check your connection and try again.';
+            } else {
+                msg = err.response?.data?.detail || 'Generation failed. Please try again.';
+            }
             setError(msg);
         } finally {
             setLoading(false);
