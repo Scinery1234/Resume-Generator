@@ -21,6 +21,20 @@ const api = axios.create({
   validateStatus: function (status) {
     return status < 500; // Don't throw for 4xx errors
   },
+  // Ensure credentials are included for CORS
+  withCredentials: false, // Set to false if CORS_ORIGINS uses "*"
+});
+
+// Log request configuration for debugging
+api.interceptors.request.use((config) => {
+  console.log('📤 API Request:', {
+    method: config.method?.toUpperCase(),
+    url: config.url,
+    baseURL: config.baseURL,
+    fullURL: (config.baseURL || '') + (config.url || ''),
+    headers: config.headers
+  });
+  return config;
 });
 
 // Add token to requests if available
@@ -79,9 +93,14 @@ export const resumeAPI = {
       const formData = new FormData();
       files.forEach(f => formData.append('files', f));
       formData.append('job_description', jobDescription);
+      
+      // Don't set Content-Type header - let browser set it with boundary
+      // This is critical for multipart/form-data requests
       const response = await api.post('/api/generate', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 180000, // 3 minutes for AI generation
+        headers: {
+          // Let axios/browser set Content-Type with boundary for multipart
+        },
       });
       
       // Check for error responses

@@ -112,7 +112,8 @@ app = FastAPI(
 # when the frontend domain isn't known yet), or a comma-separated list of
 # allowed origins for production (e.g. "https://your-app.vercel.app").
 # Note: allow_credentials cannot be True when origins is "*".
-_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")]
+_cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+_cors_origins = [o.strip() for o in _cors_origins_str.split(",") if o.strip()]
 _allow_credentials = _cors_origins != ["*"]
 app.add_middleware(
     CORSMiddleware,
@@ -120,6 +121,7 @@ app.add_middleware(
     allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],  # Expose all headers for CORS
 )
 
 # File upload configuration
