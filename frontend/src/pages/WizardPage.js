@@ -34,14 +34,18 @@ function ResultView({ result, onReset, onUpdate }) {
     const token = localStorage.getItem('token');
     const isGuest = !token || !userId;
     
-    // Load prompt info if logged in
+    // Load prompt info if logged in and update JSON text when result changes
     useEffect(() => {
         if (!isGuest && userId && result.resume_id) {
             resumeAPI.getPromptInfo(userId)
                 .then(info => setPromptInfo(info))
                 .catch(err => console.error('Failed to load prompt info:', err));
         }
-    }, [isGuest, userId, result.resume_id]);
+        // Update JSON text when result data changes
+        if (result.data) {
+            setJsonText(JSON.stringify(result.data, null, 2));
+        }
+    }, [isGuest, userId, result.resume_id, result.data]);
     
     const handleDownload = async () => {
         setDownloading(true);
