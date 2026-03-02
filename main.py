@@ -108,10 +108,16 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+# CORS_ORIGINS can be "*" to allow all origins (e.g. during development or
+# when the frontend domain isn't known yet), or a comma-separated list of
+# allowed origins for production (e.g. "https://your-app.vercel.app").
+# Note: allow_credentials cannot be True when origins is "*".
+_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")]
+_allow_credentials = _cors_origins != ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000").split(","),
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
