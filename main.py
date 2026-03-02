@@ -1,7 +1,7 @@
 import os
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field
 from openai import OpenAI
@@ -120,6 +120,7 @@ class ContactInfo(BaseModel):
     email: EmailStr
     phone: str
     location: str
+    linkedin: Optional[str] = None
 
 class ExperienceItem(BaseModel):
     title: str
@@ -319,6 +320,22 @@ async def generate_resume(
     except Exception as e:
         logger.error(f"Error generating resume: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating resume: {str(e)}")
+
+@app.post("/api/preview-resume", tags=["Resume Generation"], response_class=HTMLResponse)
+async def preview_resume(candidate: CandidateInput):
+    """
+    Return an HTML preview of the resume that matches the exported .docx layout.
+    The frontend embeds this in an iframe (srcdoc) so users see an exact document preview.
+    """
+    try:
+        candidate_dict = candidate.model_dump(exclude={'user_id'})
+        resume_builder = ResumeBuilder()
+        html_content = resume_builder.build_html_preview(candidate_dict)
+        return HTMLResponse(content=html_content, status_code=200)
+    except Exception as e:
+        logger.error(f"Error generating preview: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating preview: {str(e)}")
+
 
 @app.get("/api/resumes", tags=["Resume Management"])
 async def get_user_resumes(user_id: Optional[int] = None, db: Session = Depends(get_db)):

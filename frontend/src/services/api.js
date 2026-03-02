@@ -39,6 +39,13 @@ export const resumeAPI = {
     const response = await api.post('/api/generate-resume', payload);
     return response.data;
   },
+
+  preview: async (candidateData) => {
+    const response = await api.post('/api/preview-resume', candidateData, {
+      responseType: 'text',
+    });
+    return response.data;
+  },
   
   getAll: async (userId) => {
     const response = await api.get(`/api/resumes`, { params: { user_id: userId } });
