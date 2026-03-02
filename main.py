@@ -114,10 +114,19 @@ app = FastAPI(
 # Note: allow_credentials cannot be True when origins is "*".
 _cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:3000")
 _cors_origins = [o.strip() for o in _cors_origins_str.split(",") if o.strip()]
-_allow_credentials = _cors_origins != ["*"]
+
+# Handle wildcard for development/testing
+# If CORS_ORIGINS is "*", allow all origins but disable credentials
+if _cors_origins == ["*"]:
+    _allow_origins = ["*"]
+    _allow_credentials = False
+else:
+    _allow_origins = _cors_origins
+    _allow_credentials = True
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
+    allow_origins=_allow_origins,
     allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
