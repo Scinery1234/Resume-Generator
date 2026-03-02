@@ -184,18 +184,6 @@ const WizardPage = () => {
                     Upload up to {MAX_FILES} supporting documents (old resumes, LinkedIn exports, cover
                     letters) and paste the job description — our AI does the rest in seconds.
                 </p>
-                {backendStatus === false && (
-                    <div style={{ 
-                        marginTop: '1rem', 
-                        padding: '0.75rem', 
-                        background: '#fee', 
-                        border: '1px solid #fcc',
-                        borderRadius: '4px',
-                        color: '#c33'
-                    }}>
-                        ⚠️ Backend connection issue detected. Please check console for details.
-                    </div>
-                )}
             </div>
 
             {/* Main panels */}
