@@ -103,7 +103,11 @@ export const resumeAPI = {
       });
       formData.append('job_description', jobDescription);
       if (additionalInfo && additionalInfo.trim()) {
-        formData.append('additional_info', additionalInfo.trim());
+        const trimmedInfo = additionalInfo.trim();
+        console.log('📝 Sending additional info:', trimmedInfo.substring(0, 100) + (trimmedInfo.length > 100 ? '...' : ''));
+        formData.append('additional_info', trimmedInfo);
+      } else {
+        console.log('📝 No additional info provided');
       }
       if (userId) {
         formData.append('user_id', userId);

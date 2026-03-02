@@ -378,7 +378,17 @@ async def generate_from_documents(
     documents_text = "\n\n".join(doc_parts)
     # Include additional info if provided
     additional_info_text = additional_info.strip() if additional_info else ""
+    
+    # Log additional info for debugging
+    if additional_info_text:
+        logger.info(f"Additional information provided ({len(additional_info_text)} chars): {additional_info_text[:200]}...")
+    else:
+        logger.info("No additional information provided")
+    
     user_prompt = build_generate_prompt(documents_text, job_description, additional_info_text)
+    
+    # Log prompt length for debugging
+    logger.info(f"Generated prompt length: {len(user_prompt)} chars (includes additional info: {bool(additional_info_text)})")
 
     # Call OpenAI to generate the resume JSON
     try:
