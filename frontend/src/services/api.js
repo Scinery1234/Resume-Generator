@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+// In development the CRA proxy (package.json "proxy") forwards /api/* to localhost:8000.
+// In production set REACT_APP_API_URL to the backend's public URL.
+const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

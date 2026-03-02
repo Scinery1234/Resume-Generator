@@ -75,9 +75,9 @@ const AuthPage = () => {
                 </form>
                 <p className="toggle-text">
                     {isSignIn ? "Don't have an account? " : 'Already have an account? '}
-                    <button 
-                        type="button" 
-                        className="toggle-button" 
+                    <button
+                        type="button"
+                        className="toggle-button"
                         onClick={() => {
                             setIsSignIn(!isSignIn);
                             setError('');
@@ -86,6 +86,14 @@ const AuthPage = () => {
                         {isSignIn ? 'Sign Up' : 'Sign In'}
                     </button>
                 </p>
+                <div className="guest-divider">or</div>
+                <button
+                    type="button"
+                    className="guest-btn"
+                    onClick={() => navigate('/wizard')}
+                >
+                    Continue as Guest — no account needed
+                </button>
             </div>
         </div>
     );

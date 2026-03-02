@@ -6,9 +6,8 @@ const LandingPage = () => {
     const navigate = useNavigate();
     const token = localStorage.getItem('token');
 
-    const handleGetStarted = () => {
-        navigate(token ? '/wizard' : '/auth');
-    };
+    // "Get Started" always goes straight to the wizard — no account required.
+    const handleGetStarted = () => navigate('/wizard');
 
     return (
         <div className="lp">
@@ -64,7 +63,7 @@ const LandingPage = () => {
                         </button>
                         <a href="#how-it-works" className="lp-hero__link">See how it works</a>
                     </div>
-                    <p className="lp-hero__note">No credit card required · Free plan available</p>
+                    <p className="lp-hero__note">No account required · No credit card · Free to generate</p>
                 </div>
             </header>
 
@@ -150,7 +149,7 @@ const LandingPage = () => {
                     <h2 className="lp-section-title">Three steps to your next job</h2>
                     <div className="lp-how__steps">
                         {[
-                            { n: '01', title: 'Create an account', body: 'Sign up for free in seconds — no credit card required.' },
+                            { n: '01', title: 'No account needed', body: 'Jump straight in — generate your first resume for free with no sign-up required.' },
                             { n: '02', title: 'Fill in your details', body: 'Work through our guided wizard: personal info, experience, education, and skills.' },
                             { n: '03', title: 'Download your resume', body: 'Generate a polished Word document and start applying with confidence.' },
                         ].map((s) => (
