@@ -41,7 +41,7 @@ def _set_para_spacing(para, before: int = 0, after: int = 0, line: int = None):
 def _add_horizontal_rule(doc: Document, color: RGBColor = RULE_COLOR):
     """Add a thin 0.5pt border below the paragraph (acts as a rule)."""
     para = doc.add_paragraph()
-    _set_para_spacing(para, before=0, after=2)
+    _set_para_spacing(para, before=0, after=3)
     pPr = para._p.get_or_add_pPr()
     pBdr = OxmlElement('w:pBdr')
     bottom = OxmlElement('w:bottom')
@@ -58,7 +58,7 @@ def _add_horizontal_rule(doc: Document, color: RGBColor = RULE_COLOR):
 def _section_heading(doc: Document, text: str):
     """Add a styled section heading with a rule below."""
     para = doc.add_paragraph()
-    _set_para_spacing(para, before=8, after=1)
+    _set_para_spacing(para, before=10, after=1)
     run = para.add_run(text.upper())
     run.font.name    = HEADING_FONT
     run.font.size    = SECTION_SIZE
@@ -161,7 +161,7 @@ class ResumeBuilder:
         if summary:
             _section_heading(doc, 'Professional Summary')
             p = doc.add_paragraph()
-            _set_para_spacing(p, before=2, after=6, line=276)  # 1.15 line spacing
+            _set_para_spacing(p, before=3, after=6, line=276)  # 1.15 line spacing
             r = p.add_run(summary)
             r.font.name = BODY_FONT
             r.font.size = BODY_SIZE
@@ -171,7 +171,7 @@ class ResumeBuilder:
         if key_skills:
             _section_heading(doc, 'Key Skills')
             p = doc.add_paragraph()
-            _set_para_spacing(p, before=2, after=6)
+            _set_para_spacing(p, before=3, after=6)
             r = p.add_run('  ·  '.join(str(s) for s in key_skills))
             r.font.name = BODY_FONT
             r.font.size = BODY_SIZE
@@ -317,7 +317,7 @@ class ResumeBuilder:
         if tech_skills:
             _section_heading(doc, 'Technical Skills')
             p = doc.add_paragraph()
-            _set_para_spacing(p, before=2, after=6)
+            _set_para_spacing(p, before=3, after=6)
             r = p.add_run('  ·  '.join(str(s) for s in tech_skills))
             r.font.name = BODY_FONT
             r.font.size = BODY_SIZE
@@ -488,17 +488,18 @@ class ResumeBuilder:
     margin-bottom: 14px;
   }}
   /* Sections */
-  .section {{ margin-bottom: 14px; }}
+  .section {{ margin-bottom: 16px; }}
   .section-heading {{
     font-size: 9pt;
     font-weight: 700;
     color: #1a375e;
     letter-spacing: 0.08em;
     margin-bottom: 2px;
+    margin-top: 4px;
   }}
   .section-rule {{
     border-top: 1px solid #1a375e;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
   }}
   .body-text {{
     font-size: 10.5pt;
