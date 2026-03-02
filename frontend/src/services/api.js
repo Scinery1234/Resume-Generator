@@ -237,6 +237,10 @@ export const resumeAPI = {
     const response = await api.put(`/api/resumes/${resumeId}/update`, {
       resume_data: resumeData,
       user_id: userId,
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
     });
     return response.data;
   },

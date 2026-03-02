@@ -1,6 +1,6 @@
 import io
 import os
-from fastapi import FastAPI, Form, HTTPException, UploadFile, File, Depends, status
+from fastapi import FastAPI, Form, HTTPException, UploadFile, File, Depends, status, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -748,11 +748,16 @@ Return ONLY the updated JSON object — no other text."""
 @app.put("/api/resumes/{resume_id}/update", tags=["Resume Editing"])
 async def update_resume_inline(
     resume_id: int,
-    resume_data: dict,
-    user_id: int,
+    request_data: dict,
     db: Session = Depends(get_db),
 ):
     """Update resume data directly (for inline editing)."""
+    resume_data = request_data.get("resume_data")
+    user_id = request_data.get("user_id")
+    
+    if not resume_data or not user_id:
+        raise HTTPException(status_code=400, detail="resume_data and user_id are required")
+    
     resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id == user_id).first()
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")

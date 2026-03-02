@@ -28,7 +28,7 @@ function ResultView({ result, onReset, onUpdate }) {
     const [editError, setEditError] = useState('');
     const [promptInfo, setPromptInfo] = useState(null);
     const [isEditingInline, setIsEditingInline] = useState(false);
-    const [editedData, setEditedData] = useState(result.data);
+    const [jsonText, setJsonText] = useState(() => JSON.stringify(result.data || {}, null, 2));
     
     const userId = localStorage.getItem('userId');
     const token = localStorage.getItem('token');
@@ -99,16 +99,31 @@ function ResultView({ result, onReset, onUpdate }) {
             return;
         }
         
+        // Parse JSON and validate
+        let parsedData;
+        try {
+            parsedData = JSON.parse(jsonText);
+        } catch (err) {
+            setEditError('Invalid JSON. Please check your syntax.');
+            return;
+        }
+        
         setEditing(true);
         setEditError('');
         try {
-            const response = await resumeAPI.updateInline(result.resume_id, editedData, userId);
-            if (onUpdate) onUpdate(response);
+            const response = await resumeAPI.updateInline(result.resume_id, parsedData, userId);
+            if (onUpdate) {
+                onUpdate({
+                    ...response,
+                    preview_html: response.preview_html,
+                    data: response.data,
+                });
+            }
+            setIsEditingInline(false);
         } catch (err) {
             setEditError(err.message || 'Failed to update resume. Please try again.');
         } finally {
             setEditing(false);
-            setIsEditingInline(false);
         }
     };
 
@@ -145,19 +160,26 @@ function ResultView({ result, onReset, onUpdate }) {
                         <div className="gen-inline-editor">
                             <textarea
                                 className="gen-edit-textarea"
-                                value={JSON.stringify(editedData, null, 2)}
-                                onChange={(e) => {
-                                    try {
-                                        setEditedData(JSON.parse(e.target.value));
-                                    } catch {}
-                                }}
+                                value={jsonText}
+                                onChange={(e) => setJsonText(e.target.value)}
                                 rows={20}
                             />
+                            {jsonText && (() => {
+                                try {
+                                    JSON.parse(jsonText);
+                                    return null;
+                                } catch {
+                                    return <div className="gen-json-error">⚠️ Invalid JSON syntax</div>;
+                                }
+                            })()}
                             <div className="gen-edit-actions">
                                 <button className="btn-save" onClick={handleInlineEdit} disabled={editing}>
                                     {editing ? 'Saving...' : 'Save Changes'}
                                 </button>
-                                <button className="btn-cancel" onClick={() => setIsEditingInline(false)}>
+                                <button className="btn-cancel" onClick={() => {
+                                    setIsEditingInline(false);
+                                    setJsonText(JSON.stringify(result.data || {}, null, 2)); // Reset to original
+                                }}>
                                     Cancel
                                 </button>
                             </div>
