@@ -12,7 +12,7 @@ venv/
 env/
 
 # Database
-database.db
+*.db
 *.sqlite3
 
 # Generated resume files
