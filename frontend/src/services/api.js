@@ -33,11 +33,21 @@ export const authAPI = {
 };
 
 export const resumeAPI = {
-  generate: async (candidateData, userId = null) => {
+  // Primary: generate from uploaded documents + job description
+  generate: async (files, jobDescription) => {
+    const formData = new FormData();
+    files.forEach(f => formData.append('files', f));
+    formData.append('job_description', jobDescription);
+    const response = await api.post('/api/generate', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  // Legacy: generate from structured candidate data (wizard)
+  generateFromData: async (candidateData, userId = null) => {
     const payload = { ...candidateData };
-    if (userId) {
-      payload.user_id = userId;
-    }
+    if (userId) payload.user_id = userId;
     const response = await api.post('/api/generate-resume', payload);
     return response.data;
   },
