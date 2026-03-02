@@ -380,3 +380,185 @@
     transition: background 0.15s, border-color 0.15s;
 }
 .btn-reset:hover { background: #f1f5f9; border-color: #94a3b8; }
+
+/* ── Editing UI ───────────────────────────────────────────────────────────── */
+.gen-prompt-info {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 16px auto;
+    max-width: 1100px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+    color: #1e40af;
+}
+
+.btn-upgrade {
+    background: #0369a1;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-upgrade:hover {
+    background: #075985;
+}
+
+.gen-guest-notice {
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 16px auto;
+    max-width: 1100px;
+    font-size: 0.9rem;
+    color: #92400e;
+}
+
+.gen-edit-section {
+    max-width: 1100px;
+    margin: 24px auto;
+    padding: 0 24px;
+}
+
+.gen-edit-section h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 16px;
+}
+
+.gen-edit-prompt {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.gen-edit-input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    resize: vertical;
+    transition: border-color 0.15s;
+}
+
+.gen-edit-input:focus {
+    outline: none;
+    border-color: #0369a1;
+}
+
+.btn-edit-prompt {
+    background: linear-gradient(135deg, #0369a1 0%, #0ea5e9 100%);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 24px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    align-self: flex-start;
+    transition: opacity 0.2s;
+}
+
+.btn-edit-prompt:hover:not(:disabled) {
+    opacity: 0.9;
+}
+
+.btn-edit-prompt:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-edit-inline {
+    background: #fff;
+    color: #0369a1;
+    border: 1.5px solid #0369a1;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-edit-inline:hover:not(:disabled) {
+    background: #eff6ff;
+}
+
+.btn-edit-inline:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.gen-inline-editor {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.gen-edit-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 12px;
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 0.85rem;
+    resize: vertical;
+    min-height: 300px;
+}
+
+.gen-edit-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.btn-save {
+    background: #0369a1;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-save:hover:not(:disabled) {
+    background: #075985;
+}
+
+.btn-save:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-cancel {
+    background: #fff;
+    color: #64748b;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-cancel:hover {
+    background: #f1f5f9;
+}
