@@ -1,5 +1,6 @@
+import io
 import os
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status
+from fastapi import FastAPI, Form, HTTPException, UploadFile, File, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -15,7 +16,7 @@ from sqlalchemy.orm import Session
 from database import get_db, init_db
 from models import User, Resume
 from doc_builder import ResumeBuilder
-from prompts import SYSTEM_PROMPT_DRAFT, create_resume_prompt
+from prompts import SYSTEM_PROMPT_DRAFT, SYSTEM_PROMPT_GENERATE, create_resume_prompt, build_generate_prompt
 import uuid
 
 # Configure logging
@@ -24,7 +25,15 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) if os.getenv("OPENAI_API_KEY") else None
+
+# Only create the OpenAI client if a real API key is set (not the placeholder)
+_raw_openai_key = os.getenv("OPENAI_API_KEY", "")
+_openai_key_is_real = bool(_raw_openai_key) and not _raw_openai_key.startswith("your_")
+openai_client = OpenAI(api_key=_raw_openai_key) if _openai_key_is_real else None
+if not _openai_key_is_real:
+    logger.warning("OPENAI_API_KEY is not configured — AI generation will be unavailable")
+
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 # Initialize database
 init_db()
@@ -242,6 +251,153 @@ async def login(login_data: UserLogin, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error logging in: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error logging in: {str(e)}")
+
+# ── PDF library availability check (done once at import time) ────────────────
+# pypdf depends on the cryptography package which can have system-level issues.
+# We pre-check here so extraction code can skip it gracefully if unavailable.
+try:
+    from pypdf import PdfReader as _PdfReader
+    _PYPDF_AVAILABLE = True
+except BaseException as _pdf_import_err:
+    _PdfReader = None
+    _PYPDF_AVAILABLE = False
+    logger.warning("pypdf import failed (%s) — PDF text extraction will fall back to raw decode", _pdf_import_err)
+
+
+# ── Text extraction helpers ──────────────────────────────────────────────────
+
+async def extract_text_from_upload(file: UploadFile) -> str:
+    """Extract plain text from an uploaded file (TXT, DOCX, PDF)."""
+    content = await file.read()
+    name = (file.filename or "").lower()
+
+    if name.endswith(".txt") or file.content_type in ("text/plain",):
+        return content.decode("utf-8", errors="ignore")
+
+    if name.endswith(".docx") or "wordprocessingml" in (file.content_type or ""):
+        try:
+            from docx import Document as DocxDocument
+            doc = DocxDocument(io.BytesIO(content))
+            return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+        except BaseException as exc:
+            logger.warning("DOCX extraction failed for %s: %s", file.filename, exc)
+            return content.decode("utf-8", errors="ignore")
+
+    if name.endswith(".pdf") or file.content_type == "application/pdf":
+        if _PYPDF_AVAILABLE and _PdfReader is not None:
+            try:
+                reader = _PdfReader(io.BytesIO(content))
+                pages_text = [page.extract_text() for page in reader.pages]
+                text = "\n".join(t for t in pages_text if t)
+                if text.strip():
+                    return text
+            except BaseException as exc:
+                logger.warning("PDF extraction failed for %s: %s", file.filename, exc)
+        # Fall back: PDFs sometimes contain embedded text readable as bytes
+        return content.decode("utf-8", errors="ignore")
+
+    # Unknown type — try UTF-8 decode as a last resort
+    return content.decode("utf-8", errors="ignore")
+
+
+# ── Primary endpoint: generate from uploaded documents + job description ─────
+
+@app.post("/api/generate", tags=["Resume Generation"])
+async def generate_from_documents(
+    files: List[UploadFile] = File(default=[]),
+    job_description: str = Form(...),
+):
+    """
+    Generate a tailored Australian resume from:
+    - Up to 5 uploaded supporting documents (old resumes, LinkedIn exports, etc.)
+    - A pasted job description
+
+    The AI extracts all candidate information from the documents and tailors
+    the resume to match the requirements of the provided job description.
+    Returns a .docx download URL and an HTML preview.
+    """
+    # Validate inputs first (before checking service availability)
+    real_files = [f for f in files if f.filename]
+    if not real_files:
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload at least one supporting document (resume, LinkedIn export, etc.).",
+        )
+    if len(real_files) > 5:
+        raise HTTPException(status_code=400, detail="Maximum 5 files are allowed.")
+
+    job_description = job_description.strip()
+    if not job_description:
+        raise HTTPException(status_code=400, detail="Job description cannot be empty.")
+
+    # Check OpenAI service availability after input validation
+    if not openai_client:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "OpenAI API key is not configured. "
+                "Please add a valid OPENAI_API_KEY to the .env file and restart the server."
+            ),
+        )
+
+    # Extract text from every uploaded file
+    doc_parts: List[str] = []
+    for f in real_files:
+        text = await extract_text_from_upload(f)
+        if text.strip():
+            doc_parts.append(f"--- {f.filename} ---\n{text.strip()}")
+
+    if not doc_parts:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not extract any text from the uploaded files. "
+                   "Please ensure the files contain readable text.",
+        )
+
+    documents_text = "\n\n".join(doc_parts)
+    user_prompt = build_generate_prompt(documents_text, job_description)
+
+    # Call OpenAI to generate the resume JSON
+    try:
+        response = openai_client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT_GENERATE},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"},
+            timeout=120,
+        )
+        resume_json_str = response.choices[0].message.content
+        resume_data = json.loads(resume_json_str)
+    except json.JSONDecodeError as exc:
+        logger.error("OpenAI returned non-JSON: %s", exc)
+        raise HTTPException(status_code=500, detail="AI returned an unexpected format. Please try again.")
+    except Exception as exc:
+        logger.error("OpenAI generation failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {exc}")
+
+    # Build the .docx
+    resume_builder = ResumeBuilder()
+    resume_filename = f"resume_{uuid.uuid4().hex[:10]}.docx"
+    resume_path = RESUMES_DIR / resume_filename
+    resume_builder.build_word_document(str(resume_path), resume_data)
+
+    # Build the HTML preview
+    preview_html = resume_builder.build_html_preview(resume_data)
+
+    logger.info("Resume generated: %s (name: %s)", resume_filename, resume_data.get("name", "unknown"))
+    return {
+        "status": "success",
+        "filename": resume_filename,
+        "download_url": f"/api/resumes/download-file/{resume_filename}",
+        "preview_html": preview_html,
+        "data": resume_data,
+    }
+
+
+# ── Legacy wizard endpoint (kept for backward compatibility) ──────────────────
 
 @app.post("/api/generate-resume", tags=["Resume Generation"])
 async def generate_resume(

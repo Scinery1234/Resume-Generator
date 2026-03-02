@@ -6,6 +6,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 180000, // 3 minutes — covers Render cold-start + OpenAI generation time
   headers: {
     'Content-Type': 'application/json',
   },
@@ -33,11 +34,21 @@ export const authAPI = {
 };
 
 export const resumeAPI = {
-  generate: async (candidateData, userId = null) => {
+  // Primary: generate from uploaded documents + job description
+  generate: async (files, jobDescription) => {
+    const formData = new FormData();
+    files.forEach(f => formData.append('files', f));
+    formData.append('job_description', jobDescription);
+    const response = await api.post('/api/generate', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  // Legacy: generate from structured candidate data (wizard)
+  generateFromData: async (candidateData, userId = null) => {
     const payload = { ...candidateData };
-    if (userId) {
-      payload.user_id = userId;
-    }
+    if (userId) payload.user_id = userId;
     const response = await api.post('/api/generate-resume', payload);
     return response.data;
   },

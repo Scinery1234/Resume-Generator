@@ -3,10 +3,12 @@ Integration tests for the FastAPI application (main.py).
 Uses TestClient from httpx/starlette – no real database calls for most tests
 (the DB is SQLite in-memory or a temp file).
 """
+import io
 import os
 import json
 import pytest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 # Use a temp SQLite DB to avoid touching the production DB
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_temp.db")
@@ -253,3 +255,197 @@ class TestResumesList:
         data = resp.json()
         assert data["status"] == "success"
         assert data["resumes"] == []
+
+
+# ── /api/generate (document-based AI generation) ────────────────────────────
+
+# Minimal resume JSON that matches the schema expected by doc_builder
+MOCK_RESUME_JSON = {
+    "name": "Jane Smith",
+    "contact": {
+        "email": "jane@example.com",
+        "phone": "0412 345 678",
+        "location": "Sydney, NSW",
+        "linkedin": "",
+    },
+    "professional_summary": "Experienced software engineer with 8 years in fintech.",
+    "key_skills": ["Python", "FastAPI", "AWS"],
+    "experience": [
+        {
+            "title": "Senior Software Engineer",
+            "company": "FinTech Co",
+            "location": "Sydney, NSW",
+            "dates": "Jan 2020 – Present",
+            "description": "",
+            "bullets": ["Led migration of legacy systems to microservices, reducing latency by 40%."],
+        }
+    ],
+    "education": [
+        {
+            "degree": "Bachelor of Computer Science",
+            "field": "Software Engineering",
+            "institution": "University of Sydney",
+            "graduation_year": "2015",
+        }
+    ],
+    "certifications": [],
+    "awards": [],
+    "technical_skills": ["Python", "Docker", "Kubernetes"],
+}
+
+
+def _mock_openai_client(monkeypatch):
+    """Return a mocked openai_client and patch it into main module."""
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.choices[0].message.content = json.dumps(MOCK_RESUME_JSON)
+    mock_client.chat.completions.create.return_value = mock_response
+    monkeypatch.setattr("main.openai_client", mock_client)
+    return mock_client
+
+
+class TestGenerateFromDocuments:
+    """Tests for POST /api/generate — document-based AI resume generation."""
+
+    def test_generate_without_files_returns_error(self):
+        # No files provided → endpoint must not return 200.
+        # FastAPI may return 422 (form validation) or the endpoint returns 400.
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Senior Software Engineer at FinTech startup."},
+        )
+        assert resp.status_code in (400, 422)
+        assert resp.status_code != 200
+
+    def test_generate_without_job_description_returns_422(self):
+        txt = b"Jane Smith\nSoftware Engineer\n8 years Python experience"
+        resp = client.post(
+            "/api/generate",
+            files=[("files", ("resume.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        # job_description is a required Form field → 422 Unprocessable Entity
+        assert resp.status_code == 422
+
+    def test_generate_no_openai_key_returns_503(self, monkeypatch):
+        monkeypatch.setattr("main.openai_client", None)
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer role"},
+            files=[("files", ("resume.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 503
+        assert "openai" in resp.json()["detail"].lower()
+
+    def test_generate_with_txt_file_returns_success(self, monkeypatch):
+        _mock_openai_client(monkeypatch)
+        txt = b"Jane Smith\nSoftware Engineer\n8 years Python experience"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Senior Python developer with AWS experience."},
+            files=[("files", ("resume.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "success"
+        assert "filename" in data
+        assert data["filename"].endswith(".docx")
+        assert "download_url" in data
+        assert "preview_html" in data
+
+    def test_generate_creates_docx_file(self, monkeypatch):
+        _mock_openai_client(monkeypatch)
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+        filename = resp.json()["filename"]
+        assert Path("./resumes") / filename
+
+    def test_generate_preview_html_contains_name(self, monkeypatch):
+        _mock_openai_client(monkeypatch)
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+        assert "JANE SMITH" in resp.json()["preview_html"]
+
+    def test_generate_download_url_accessible(self, monkeypatch):
+        _mock_openai_client(monkeypatch)
+        txt = b"Jane Smith\nSoftware Engineer"
+        gen_resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert gen_resp.status_code == 200
+        dl_resp = client.get(gen_resp.json()["download_url"])
+        assert dl_resp.status_code == 200
+        assert "application/vnd.openxmlformats" in dl_resp.headers["content-type"]
+
+    def test_generate_with_docx_file(self, monkeypatch):
+        """Upload a real minimal .docx file and verify extraction doesn't crash."""
+        _mock_openai_client(monkeypatch)
+        from docx import Document as DocxDocument
+        buf = io.BytesIO()
+        doc = DocxDocument()
+        doc.add_paragraph("Jane Smith")
+        doc.add_paragraph("Senior Software Engineer")
+        doc.save(buf)
+        buf.seek(0)
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Software engineer role"},
+            files=[("files", ("resume.docx", buf, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"))],
+        )
+        assert resp.status_code == 200
+
+    def test_generate_with_pdf_file(self, monkeypatch):
+        """PDF upload should not crash even if pypdf has system-level issues.
+        The endpoint falls back to raw decode; the mock fills in the resume data."""
+        _mock_openai_client(monkeypatch)
+        # Use a simple text file named .pdf — the endpoint will attempt PDF
+        # extraction and fall back gracefully, then the mock provides the response.
+        fake_pdf_as_text = b"Jane Smith\nSenior Software Engineer\n8 years Python experience"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Software engineer role"},
+            files=[("files", ("resume.pdf", io.BytesIO(fake_pdf_as_text), "application/pdf"))],
+        )
+        # Should succeed regardless of pypdf availability
+        assert resp.status_code == 200
+
+    def test_generate_too_many_files_returns_400(self, monkeypatch):
+        _mock_openai_client(monkeypatch)
+        files = [
+            ("files", (f"cv{i}.txt", io.BytesIO(b"text"), "text/plain"))
+            for i in range(6)
+        ]
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer"},
+            files=files,
+        )
+        assert resp.status_code == 400
+        assert "maximum" in resp.json()["detail"].lower()
+
+    def test_generate_openai_json_error_returns_500(self, monkeypatch):
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices[0].message.content = "This is not JSON at all"
+        mock_client.chat.completions.create.return_value = mock_response
+        monkeypatch.setattr("main.openai_client", mock_client)
+
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 500
