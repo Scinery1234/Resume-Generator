@@ -1,3 +1,18 @@
+"""
+OpenAI prompt definitions and builder functions for the Resume Generator.
+
+This module contains two separate prompt strategies:
+
+1. **Document-based generation** (primary flow — POST /api/generate)
+   - `SYSTEM_PROMPT_GENERATE` : expert Australian resume-writer persona with strict JSON output rules.
+   - `build_generate_prompt`  : assembles the user-facing prompt from uploaded document text,
+                                a job description, and optional additional information.
+
+2. **Legacy wizard-based generation** (POST /api/generate-resume)
+   - `SYSTEM_PROMPT_DRAFT`    : simpler prompt used to enhance a manually filled-in summary.
+   - `create_resume_prompt`   : formats structured candidate data into a plain-text prompt.
+"""
+
 # ── Document-based AI generation (primary flow) ────────────────────────────
 
 SYSTEM_PROMPT_GENERATE = """You are a highly experienced Australian professional resume writer with over 10 years of expertise creating compelling, tailored resumes for senior-level candidates across all industries.
@@ -76,7 +91,34 @@ The JSON must strictly follow this exact schema (include every key even if the v
 
 
 def build_generate_prompt(documents_text: str, job_description: str, additional_info: str = "") -> str:
-    """Build the user-facing prompt that includes extracted document text, job description, and optional additional information."""
+    """Assemble the user-facing prompt for document-based resume generation.
+
+    The prompt is structured into clearly labelled sections so that the model
+    can locate each piece of information reliably:
+
+    - ``CANDIDATE DOCUMENTS``       — concatenated text extracted from all uploaded files.
+    - ``JOB DESCRIPTION``           — the job ad pasted by the user.
+    - ``ADDITIONAL INFORMATION``    — optional extra context (selection criteria responses,
+                                      key achievements, etc.). When present, the model is
+                                      explicitly instructed to weave this content throughout
+                                      the resume rather than treating it as an afterthought.
+
+    Parameters
+    ----------
+    documents_text : str
+        Combined plain-text content extracted from the candidate's uploaded files.
+        Each file's content is prefixed with ``--- filename ---`` for clarity.
+    job_description : str
+        The full job advertisement text provided by the user.
+    additional_info : str, optional
+        Free-form text with extra candidate context (e.g. selection criteria answers,
+        notable achievements). Defaults to an empty string (section is omitted).
+
+    Returns
+    -------
+    str
+        The fully assembled user prompt to pass to the OpenAI chat completion API.
+    """
     prompt = f"""Please create a professional, tailored Australian resume using the information below.
 
 === CANDIDATE DOCUMENTS ===
@@ -84,8 +126,10 @@ def build_generate_prompt(documents_text: str, job_description: str, additional_
 
 === JOB DESCRIPTION ===
 {job_description}"""
-    
+
     if additional_info and additional_info.strip():
+        # Explicitly instruct the model to incorporate the additional information
+        # throughout the resume, not just reference it once.
         prompt += f"""
 
 === ADDITIONAL INFORMATION (MUST BE INCORPORATED) ===
@@ -101,7 +145,7 @@ ADDITIONAL INFORMATION PROVIDED BY CANDIDATE:
 {additional_info.strip()}
 
 IMPORTANT: Do not just reference this information—actively use it to craft compelling bullet points, enhance the professional summary, and ensure the resume directly addresses the job requirements. This information should be woven throughout the resume, not just mentioned once."""
-    
+
     prompt += """
 
 Instructions:
@@ -113,7 +157,7 @@ Instructions:
   * Ensure the additional information is woven into the resume naturally, not just added as a separate section
   * Make the resume directly address what the candidate highlighted in their additional information
 - Respond with ONLY the JSON object — no other text before or after."""
-    
+
     return prompt
 
 
@@ -136,7 +180,26 @@ Use action verbs and quantify achievements where possible."""
 
 
 def create_resume_prompt(candidate_data: dict) -> str:
-    """Create a prompt for the legacy wizard-based generation."""
+    """Build a plain-text prompt for the legacy wizard-based generation endpoint.
+
+    This prompt is used by ``POST /api/generate-resume``, which accepts
+    structured candidate data directly rather than uploaded documents. The
+    model is asked to enhance the professional summary; the rest of the resume
+    is built deterministically by :class:`doc_builder.ResumeBuilder`.
+
+    Parameters
+    ----------
+    candidate_data : dict
+        A dictionary matching the ``CandidateInput`` Pydantic model, containing
+        keys such as ``name``, ``contact``, ``professional_summary``,
+        ``key_skills``, ``experience``, ``education``, ``certifications``,
+        ``awards``, and ``technical_skills``.
+
+    Returns
+    -------
+    str
+        A formatted plain-text prompt ready to be sent to the OpenAI API.
+    """
     prompt = f"""Generate a professional resume for the following candidate:
 
 Name: {candidate_data.get('name', 'N/A')}
