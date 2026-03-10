@@ -88,10 +88,11 @@ export const authAPI = {
 
 export const resumeAPI = {
   // Primary: generate from uploaded documents + job description + additional info
-  generate: async (files, jobDescription, additionalInfo = '', userId = null) => {
+  generate: async (files, jobDescription, additionalInfo = '', userId = null, template = 'modern') => {
     try {
       console.log('🚀 Starting resume generation...', {
         filesCount: files.length,
+        template,
         apiUrl: API_BASE_URL,
         fullUrl: `${API_BASE_URL}/api/generate`
       });
@@ -109,6 +110,7 @@ export const resumeAPI = {
       } else {
         console.log('📝 No additional info provided');
       }
+      formData.append('template', template || 'modern');
       if (userId) {
         formData.append('user_id', userId);
       }

@@ -245,6 +245,79 @@ function ResultView({ result, onReset, onUpdate }) {
     );
 }
 
+// ── Template selector ────────────────────────────────────────────────────────
+const TEMPLATES = [
+    {
+        id: 'modern',
+        name: 'Modern',
+        description: 'Clean navy-blue design — polished and professional.',
+        preview: { headingColor: '#1a375e', ruleColor: '#1a375e', font: 'sans-serif' },
+    },
+    {
+        id: 'classic',
+        name: 'Classic',
+        description: 'Traditional serif format — timeless and formal.',
+        preview: { headingColor: '#1a1a1a', ruleColor: '#333333', font: 'Georgia, serif' },
+    },
+    {
+        id: 'creative',
+        name: 'Creative',
+        description: 'Purple & teal accents — bold and contemporary.',
+        preview: { headingColor: '#6b21a8', ruleColor: '#0891b2', font: 'sans-serif' },
+    },
+    {
+        id: 'minimal',
+        name: 'Minimal',
+        description: 'Light-gray rules — understated and elegant.',
+        preview: { headingColor: '#374151', ruleColor: '#d1d5db', font: 'sans-serif' },
+    },
+];
+
+function TemplateSelector({ selected, onChange }) {
+    return (
+        <div className="gen-panel gen-panel--full">
+            <h2 className="gen-panel__title">
+                <span className="gen-panel__icon">🎨</span>
+                Resume Template
+                <span className="gen-panel__hint">choose a style</span>
+            </h2>
+            <div className="gen-templates">
+                {TEMPLATES.map(t => (
+                    <button
+                        key={t.id}
+                        type="button"
+                        className={`gen-template-card${selected === t.id ? ' gen-template-card--active' : ''}`}
+                        onClick={() => onChange(t.id)}
+                        aria-pressed={selected === t.id}
+                    >
+                        {/* Mini preview */}
+                        <div
+                            className="gen-template-thumb"
+                            style={{ fontFamily: t.preview.font }}
+                        >
+                            <div className="gen-template-thumb__name" style={{ color: t.preview.headingColor }}>
+                                JANE SMITH
+                            </div>
+                            <div className="gen-template-thumb__rule" style={{ borderColor: t.preview.ruleColor }} />
+                            <div className="gen-template-thumb__section" style={{ color: t.preview.headingColor }}>
+                                EXPERIENCE
+                            </div>
+                            <div className="gen-template-thumb__rule gen-template-thumb__rule--section" style={{ borderColor: t.preview.ruleColor }} />
+                            <div className="gen-template-thumb__text" />
+                            <div className="gen-template-thumb__text gen-template-thumb__text--short" />
+                        </div>
+                        <div className="gen-template-info">
+                            <span className="gen-template-name">{t.name}</span>
+                            <span className="gen-template-desc">{t.description}</span>
+                        </div>
+                        {selected === t.id && <span className="gen-template-check">✓</span>}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 // ── Main generator page ───────────────────────────────────────────────────────
 const WizardPage = () => {
     const navigate      = useNavigate();
@@ -252,6 +325,7 @@ const WizardPage = () => {
     const [files, setFiles]             = useState([]);
     const [jobDesc, setJobDesc]         = useState('');
     const [additionalInfo, setAdditionalInfo] = useState('');
+    const [template, setTemplate]       = useState('modern');
     const [isDragging, setIsDragging]   = useState(false);
     const [loading, setLoading]         = useState(false);
     const [error, setError]             = useState('');
@@ -295,7 +369,7 @@ const WizardPage = () => {
         setLoading(true);
         setError(''); // Clear previous errors
         try {
-            const data = await resumeAPI.generate(files, jobDesc, additionalInfo);
+            const data = await resumeAPI.generate(files, jobDesc, additionalInfo, null, template);
             setResult(data);
         } catch (err) {
             // Use the enhanced error message from the API interceptor
@@ -467,6 +541,9 @@ const WizardPage = () => {
                     Tip: Include specific examples, achievements, or responses to selection criteria that directly relate to the job description.
                 </p>
             </div>
+
+            {/* Template Selector */}
+            <TemplateSelector selected={template} onChange={setTemplate} />
 
             {/* Error */}
             {error && (

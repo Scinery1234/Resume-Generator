@@ -13,17 +13,123 @@ import html
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# ── Palette ────────────────────────────────────────────────────────────────
-HEADING_COLOR  = RGBColor(0x1a, 0x37, 0x5e)   # deep navy
-RULE_COLOR     = RGBColor(0x1a, 0x37, 0x5e)
-MUTED_COLOR    = RGBColor(0x44, 0x55, 0x66)    # slate grey
+# ── Template Definitions ────────────────────────────────────────────────────
+TEMPLATES = {
+    "modern": {
+        "heading_color": RGBColor(0x1a, 0x37, 0x5e),   # deep navy
+        "rule_color":    RGBColor(0x1a, 0x37, 0x5e),
+        "muted_color":   RGBColor(0x44, 0x55, 0x66),   # slate grey
+        "body_font":     "Calibri",
+        "heading_font":  "Calibri",
+        "name_size":     Pt(20),
+        "contact_size":  Pt(10),
+        "section_size":  Pt(10),
+        "body_size":     Pt(10.5),
+        "name_align":    WD_ALIGN_PARAGRAPH.CENTER,
+        "section_rule":  True,
+        # HTML colours
+        "html_heading":  "#1a375e",
+        "html_rule":     "#1a375e",
+        "html_muted":    "#445566",
+        "html_name_size": "20pt",
+        "html_body_size": "10.5pt",
+        "html_section_size": "9pt",
+        "html_contact_size": "9.5pt",
+        "html_accent_bg": None,
+    },
+    "classic": {
+        "heading_color": RGBColor(0x1a, 0x1a, 0x1a),   # near black
+        "rule_color":    RGBColor(0x33, 0x33, 0x33),
+        "muted_color":   RGBColor(0x55, 0x55, 0x55),
+        "body_font":     "Georgia",
+        "heading_font":  "Georgia",
+        "name_size":     Pt(18),
+        "contact_size":  Pt(10),
+        "section_size":  Pt(10),
+        "body_size":     Pt(10.5),
+        "name_align":    WD_ALIGN_PARAGRAPH.CENTER,
+        "section_rule":  True,
+        "html_heading":  "#1a1a1a",
+        "html_rule":     "#333333",
+        "html_muted":    "#555555",
+        "html_name_size": "18pt",
+        "html_body_size": "10.5pt",
+        "html_section_size": "9.5pt",
+        "html_contact_size": "10pt",
+        "html_accent_bg": None,
+    },
+    "creative": {
+        "heading_color": RGBColor(0x6b, 0x21, 0xa8),   # purple
+        "rule_color":    RGBColor(0x08, 0x91, 0xb2),   # teal
+        "muted_color":   RGBColor(0x4b, 0x55, 0x63),
+        "body_font":     "Calibri",
+        "heading_font":  "Calibri",
+        "name_size":     Pt(22),
+        "contact_size":  Pt(10),
+        "section_size":  Pt(10),
+        "body_size":     Pt(10.5),
+        "name_align":    WD_ALIGN_PARAGRAPH.LEFT,
+        "section_rule":  True,
+        "html_heading":  "#6b21a8",
+        "html_rule":     "#0891b2",
+        "html_muted":    "#4b5563",
+        "html_name_size": "22pt",
+        "html_body_size": "10.5pt",
+        "html_section_size": "9pt",
+        "html_contact_size": "9.5pt",
+        "html_accent_bg": None,
+    },
+    "minimal": {
+        "heading_color": RGBColor(0x37, 0x41, 0x51),   # dark slate
+        "rule_color":    RGBColor(0xd1, 0xd5, 0xdb),   # light gray
+        "muted_color":   RGBColor(0x6b, 0x72, 0x80),
+        "body_font":     "Calibri",
+        "heading_font":  "Calibri",
+        "name_size":     Pt(19),
+        "contact_size":  Pt(10),
+        "section_size":  Pt(9),
+        "body_size":     Pt(10.5),
+        "name_align":    WD_ALIGN_PARAGRAPH.LEFT,
+        "section_rule":  True,
+        "html_heading":  "#374151",
+        "html_rule":     "#d1d5db",
+        "html_muted":    "#6b7280",
+        "html_name_size": "19pt",
+        "html_body_size": "10.5pt",
+        "html_section_size": "8.5pt",
+        "html_contact_size": "9.5pt",
+        "html_accent_bg": None,
+    },
+}
 
-BODY_FONT   = "Calibri"
-HEADING_FONT = "Calibri"
-NAME_SIZE   = Pt(20)
-CONTACT_SIZE = Pt(10)
-SECTION_SIZE = Pt(10)
-BODY_SIZE   = Pt(10.5)
+# Available template IDs and metadata (used by the API)
+TEMPLATE_LIST = [
+    {
+        "id": "modern",
+        "name": "Modern",
+        "description": "Clean navy-blue design — polished and professional.",
+    },
+    {
+        "id": "classic",
+        "name": "Classic",
+        "description": "Traditional serif format — timeless and formal.",
+    },
+    {
+        "id": "creative",
+        "name": "Creative",
+        "description": "Purple & teal accents — bold and contemporary.",
+    },
+    {
+        "id": "minimal",
+        "name": "Minimal",
+        "description": "Light-gray rules — understated and elegant.",
+    },
+]
+
+
+def _get_template(template_id: str) -> Dict:
+    """Return a template config dict, falling back to 'modern'."""
+    return TEMPLATES.get((template_id or "modern").lower(), TEMPLATES["modern"])
 
 
 def _set_para_spacing(para, before: int = 0, after: int = 0, line: int = None):
@@ -38,8 +144,10 @@ def _set_para_spacing(para, before: int = 0, after: int = 0, line: int = None):
     pPr.append(spacing)
 
 
-def _add_horizontal_rule(doc: Document, color: RGBColor = RULE_COLOR):
+def _add_horizontal_rule(doc: Document, color: RGBColor = None):
     """Add a thin 0.5pt border below the paragraph (acts as a rule)."""
+    if color is None:
+        color = RGBColor(0x1a, 0x37, 0x5e)
     para = doc.add_paragraph()
     _set_para_spacing(para, before=0, after=3)
     pPr = para._p.get_or_add_pPr()
@@ -55,27 +163,26 @@ def _add_horizontal_rule(doc: Document, color: RGBColor = RULE_COLOR):
     return para
 
 
-def _section_heading(doc: Document, text: str):
+def _section_heading(doc: Document, text: str, tmpl: Dict):
     """Add a styled section heading with a rule below."""
     para = doc.add_paragraph()
     _set_para_spacing(para, before=10, after=1)
     run = para.add_run(text.upper())
-    run.font.name    = HEADING_FONT
-    run.font.size    = SECTION_SIZE
+    run.font.name    = tmpl["heading_font"]
+    run.font.size    = tmpl["section_size"]
     run.font.bold    = True
-    run.font.color.rgb = HEADING_COLOR
-    _add_horizontal_rule(doc)
+    run.font.color.rgb = tmpl["heading_color"]
+    if tmpl.get("section_rule", True):
+        _add_horizontal_rule(doc, tmpl["rule_color"])
 
 
 def _set_doc_margins(doc: Document):
-    """Set page margins to 2.5 cm on all sides (A4)."""
-    from docx.oxml.ns import qn
+    """Set page margins to 2.0 cm top/bottom, 2.2 cm sides (A4)."""
     for section in doc.sections:
         section.page_height = Cm(29.7)
         section.page_width  = Cm(21.0)
-        margin = Cm(2.0)
-        section.top_margin    = margin
-        section.bottom_margin = margin
+        section.top_margin    = Cm(2.0)
+        section.bottom_margin = Cm(2.0)
         section.left_margin   = Cm(2.2)
         section.right_margin  = Cm(2.2)
 
@@ -112,31 +219,38 @@ class ResumeBuilder:
         return resume
 
     # ── Main Word document builder ───────────────────────────────────────
-    def build_word_document(self, output_path: str, candidate_data: Dict) -> str:
+    def build_word_document(self, output_path: str, candidate_data: Dict, template_id: str = "modern") -> str:
         """
         Build a professionally formatted Australian-style resume as a .docx file.
         Sections: Header, Professional Summary, Key Skills, Work Experience,
                   Education, Certifications, Awards, Technical Skills.
+
+        Args:
+            output_path: Where to save the .docx file.
+            candidate_data: Resume data dictionary.
+            template_id: One of "modern", "classic", "creative", "minimal".
         """
+        tmpl = _get_template(template_id)
+
         doc = Document()
         _set_doc_margins(doc)
 
-        # Remove default Normal paragraph spacing
+        # Apply body font to Normal style
         normal = doc.styles['Normal']
-        normal.font.name = BODY_FONT
-        normal.font.size = BODY_SIZE
+        normal.font.name = tmpl["body_font"]
+        normal.font.size = tmpl["body_size"]
 
         contact: Dict = candidate_data.get('contact', {})
 
         # ── Header: Name ────────────────────────────────────────────────
         name_para = doc.add_paragraph()
         _set_para_spacing(name_para, before=0, after=2)
-        name_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        name_para.alignment = tmpl["name_align"]
         name_run = name_para.add_run(candidate_data.get('name', '').strip().upper())
-        name_run.font.name  = HEADING_FONT
-        name_run.font.size  = NAME_SIZE
+        name_run.font.name  = tmpl["heading_font"]
+        name_run.font.size  = tmpl["name_size"]
         name_run.font.bold  = True
-        name_run.font.color.rgb = HEADING_COLOR
+        name_run.font.color.rgb = tmpl["heading_color"]
 
         # ── Contact line ────────────────────────────────────────────────
         contact_parts = []
@@ -147,82 +261,77 @@ class ResumeBuilder:
 
         contact_para = doc.add_paragraph()
         _set_para_spacing(contact_para, before=0, after=4)
-        contact_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        contact_para.alignment = tmpl["name_align"]
         contact_run = contact_para.add_run('  ·  '.join(contact_parts))
-        contact_run.font.name  = BODY_FONT
-        contact_run.font.size  = CONTACT_SIZE
-        contact_run.font.color.rgb = MUTED_COLOR
+        contact_run.font.name  = tmpl["body_font"]
+        contact_run.font.size  = tmpl["contact_size"]
+        contact_run.font.color.rgb = tmpl["muted_color"]
 
-        # Thin rule under header
-        _add_horizontal_rule(doc)
+        # Rule under header
+        _add_horizontal_rule(doc, tmpl["rule_color"])
 
         # ── Professional Summary ────────────────────────────────────────
         summary = candidate_data.get('professional_summary', '').strip()
         if summary:
-            _section_heading(doc, 'Professional Summary')
+            _section_heading(doc, 'Professional Summary', tmpl)
             p = doc.add_paragraph()
-            _set_para_spacing(p, before=3, after=6, line=276)  # 1.15 line spacing
+            _set_para_spacing(p, before=3, after=6, line=276)
             r = p.add_run(summary)
-            r.font.name = BODY_FONT
-            r.font.size = BODY_SIZE
+            r.font.name = tmpl["body_font"]
+            r.font.size = tmpl["body_size"]
 
         # ── Key Skills ─────────────────────────────────────────────────
         key_skills = candidate_data.get('key_skills', [])
         if key_skills:
-            _section_heading(doc, 'Key Skills')
+            _section_heading(doc, 'Key Skills', tmpl)
             p = doc.add_paragraph()
             _set_para_spacing(p, before=3, after=6)
             r = p.add_run('  ·  '.join(str(s) for s in key_skills))
-            r.font.name = BODY_FONT
-            r.font.size = BODY_SIZE
+            r.font.name = tmpl["body_font"]
+            r.font.size = tmpl["body_size"]
 
         # ── Work Experience ─────────────────────────────────────────────
         experience = candidate_data.get('experience', [])
         if experience:
-            _section_heading(doc, 'Work Experience')
+            _section_heading(doc, 'Work Experience', tmpl)
             for i, exp in enumerate(experience):
                 # Row 1: Job Title (bold) — right-aligned dates
                 job_para = doc.add_paragraph()
                 _set_para_spacing(job_para, before=4, after=0)
                 title_run = job_para.add_run(exp.get('title', ''))
-                title_run.font.name  = BODY_FONT
-                title_run.font.size  = BODY_SIZE
+                title_run.font.name  = tmpl["body_font"]
+                title_run.font.size  = tmpl["body_size"]
                 title_run.font.bold  = True
+                title_run.font.color.rgb = tmpl["heading_color"]
 
                 dates = exp.get('dates', '')
                 if dates:
-                    # Tab-separated so dates float right via a right-aligned tab stop
                     tab_run = job_para.add_run('\t' + dates)
-                    tab_run.font.name  = BODY_FONT
-                    tab_run.font.size  = BODY_SIZE
+                    tab_run.font.name  = tmpl["body_font"]
+                    tab_run.font.size  = tmpl["body_size"]
                     tab_run.font.bold  = False
-                    tab_run.font.color.rgb = MUTED_COLOR
-                    # Add right-indent tab stop
-                    from docx.oxml import OxmlElement
-                    from docx.oxml.ns import qn
+                    tab_run.font.color.rgb = tmpl["muted_color"]
                     pPr = job_para._p.get_or_add_pPr()
                     tabs = OxmlElement('w:tabs')
                     tab = OxmlElement('w:tab')
                     tab.set(qn('w:val'), 'right')
-                    # page width - margins ≈ 16.6 cm → 9400 twips
                     tab.set(qn('w:pos'), '9360')
                     tabs.append(tab)
                     pPr.append(tabs)
 
                 # Row 2: Company  |  Location (italic, muted)
-                company   = exp.get('company', '')
-                location  = exp.get('location', '')
+                company  = exp.get('company', '')
+                location = exp.get('location', '')
                 sub_parts = [p for p in [company, location] if p]
                 if sub_parts:
                     sub_para = doc.add_paragraph()
                     _set_para_spacing(sub_para, before=0, after=1)
                     sub_run = sub_para.add_run('  |  '.join(sub_parts))
-                    sub_run.font.name    = BODY_FONT
-                    sub_run.font.size    = BODY_SIZE
+                    sub_run.font.name    = tmpl["body_font"]
+                    sub_run.font.size    = tmpl["body_size"]
                     sub_run.font.italic  = True
-                    sub_run.font.color.rgb = MUTED_COLOR
+                    sub_run.font.color.rgb = tmpl["muted_color"]
 
-                # Description paragraph (if no bullets)
                 description = exp.get('description', '').strip()
                 bullets     = exp.get('bullets', [])
 
@@ -236,16 +345,15 @@ class ResumeBuilder:
                         ind.set(qn('w:hanging'), '180')
                         pPr.append(ind)
                         br = bp.add_run(str(bullet))
-                        br.font.name = BODY_FONT
-                        br.font.size = BODY_SIZE
+                        br.font.name = tmpl["body_font"]
+                        br.font.size = tmpl["body_size"]
                 elif description:
                     dp = doc.add_paragraph()
                     _set_para_spacing(dp, before=1, after=1, line=276)
                     dr = dp.add_run(description)
-                    dr.font.name = BODY_FONT
-                    dr.font.size = BODY_SIZE
+                    dr.font.name = tmpl["body_font"]
+                    dr.font.size = tmpl["body_size"]
 
-                # Spacing between jobs (except last)
                 if i < len(experience) - 1:
                     sp = doc.add_paragraph()
                     _set_para_spacing(sp, before=0, after=3)
@@ -253,7 +361,7 @@ class ResumeBuilder:
         # ── Education ──────────────────────────────────────────────────
         education = candidate_data.get('education', [])
         if education:
-            _section_heading(doc, 'Education')
+            _section_heading(doc, 'Education', tmpl)
             for edu in education:
                 degree = edu.get('degree', '')
                 field  = edu.get('field',  '')
@@ -263,15 +371,16 @@ class ResumeBuilder:
                 edu_para = doc.add_paragraph()
                 _set_para_spacing(edu_para, before=4, after=0)
                 dr = edu_para.add_run(deg_text)
-                dr.font.name = BODY_FONT
-                dr.font.size = BODY_SIZE
+                dr.font.name = tmpl["body_font"]
+                dr.font.size = tmpl["body_size"]
                 dr.font.bold = True
+                dr.font.color.rgb = tmpl["heading_color"]
                 if grad:
                     tab_run = edu_para.add_run('\t' + grad)
-                    tab_run.font.name  = BODY_FONT
-                    tab_run.font.size  = BODY_SIZE
+                    tab_run.font.name  = tmpl["body_font"]
+                    tab_run.font.size  = tmpl["body_size"]
                     tab_run.font.bold  = False
-                    tab_run.font.color.rgb = MUTED_COLOR
+                    tab_run.font.color.rgb = tmpl["muted_color"]
                     pPr = edu_para._p.get_or_add_pPr()
                     tabs = OxmlElement('w:tabs')
                     tab_el = OxmlElement('w:tab')
@@ -285,54 +394,59 @@ class ResumeBuilder:
                     ip = doc.add_paragraph()
                     _set_para_spacing(ip, before=0, after=4)
                     ir = ip.add_run(inst)
-                    ir.font.name    = BODY_FONT
-                    ir.font.size    = BODY_SIZE
+                    ir.font.name    = tmpl["body_font"]
+                    ir.font.size    = tmpl["body_size"]
                     ir.font.italic  = True
-                    ir.font.color.rgb = MUTED_COLOR
+                    ir.font.color.rgb = tmpl["muted_color"]
 
         # ── Certifications ─────────────────────────────────────────────
         certs = candidate_data.get('certifications', [])
         if certs:
-            _section_heading(doc, 'Certifications')
+            _section_heading(doc, 'Certifications', tmpl)
             for cert in certs:
                 cp = doc.add_paragraph(style='List Bullet')
                 _set_para_spacing(cp, before=1, after=1)
                 cr = cp.add_run(str(cert))
-                cr.font.name = BODY_FONT
-                cr.font.size = BODY_SIZE
+                cr.font.name = tmpl["body_font"]
+                cr.font.size = tmpl["body_size"]
 
         # ── Awards ─────────────────────────────────────────────────────
         awards = candidate_data.get('awards', [])
         if awards:
-            _section_heading(doc, 'Awards & Recognition')
+            _section_heading(doc, 'Awards & Recognition', tmpl)
             for award in awards:
                 ap = doc.add_paragraph(style='List Bullet')
                 _set_para_spacing(ap, before=1, after=1)
                 ar = ap.add_run(str(award))
-                ar.font.name = BODY_FONT
-                ar.font.size = BODY_SIZE
+                ar.font.name = tmpl["body_font"]
+                ar.font.size = tmpl["body_size"]
 
         # ── Technical Skills ───────────────────────────────────────────
         tech_skills = candidate_data.get('technical_skills', [])
         if tech_skills:
-            _section_heading(doc, 'Technical Skills')
+            _section_heading(doc, 'Technical Skills', tmpl)
             p = doc.add_paragraph()
             _set_para_spacing(p, before=3, after=6)
             r = p.add_run('  ·  '.join(str(s) for s in tech_skills))
-            r.font.name = BODY_FONT
-            r.font.size = BODY_SIZE
+            r.font.name = tmpl["body_font"]
+            r.font.size = tmpl["body_size"]
 
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         doc.save(output_path)
-        logger.info(f'Resume saved → {output_path}')
+        logger.info(f'Resume saved → {output_path} (template: {template_id})')
         return output_path
 
     # ── HTML preview builder ─────────────────────────────────────────────
-    def build_html_preview(self, candidate_data: Dict) -> str:
+    def build_html_preview(self, candidate_data: Dict, template_id: str = "modern") -> str:
         """
         Return a self-contained HTML string that visually matches the .docx layout.
         Styled to look like an A4 document with the same sections and formatting.
+
+        Args:
+            candidate_data: Resume data dictionary.
+            template_id: One of "modern", "classic", "creative", "minimal".
         """
+        tmpl = _get_template(template_id)
         e = html.escape
         contact: Dict = candidate_data.get('contact', {})
 
@@ -442,8 +556,16 @@ class ResumeBuilder:
             body_parts.append(section('Technical Skills',
                 f'<p class="body-text">{ts_html}</p>'))
 
-        name_html = e(candidate_data.get('name', '').strip().upper())
+        name_html    = e(candidate_data.get('name', '').strip().upper())
         contact_html = '  ·  '.join(contact_parts)
+
+        # Determine font family string for CSS
+        font_family = (
+            "Georgia, 'Times New Roman', serif"
+            if tmpl["body_font"] == "Georgia"
+            else "Calibri, 'Segoe UI', Arial, sans-serif"
+        )
+        name_align = "left" if tmpl["name_align"] == WD_ALIGN_PARAGRAPH.LEFT else "center"
 
         return f'''<!DOCTYPE html>
 <html lang="en">
@@ -454,8 +576,8 @@ class ResumeBuilder:
 <style>
   *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{
-    font-family: Calibri, 'Segoe UI', Arial, sans-serif;
-    font-size: 10.5pt;
+    font-family: {font_family};
+    font-size: {tmpl["html_body_size"]};
     color: #222;
     background: #fff;
   }}
@@ -468,41 +590,41 @@ class ResumeBuilder:
   }}
   /* Header */
   .resume-name {{
-    font-size: 20pt;
+    font-size: {tmpl["html_name_size"]};
     font-weight: 700;
-    color: #1a375e;
-    text-align: center;
+    color: {tmpl["html_heading"]};
+    text-align: {name_align};
     letter-spacing: 0.04em;
     margin-bottom: 4px;
   }}
   .resume-contact {{
-    font-size: 9.5pt;
-    color: #445566;
-    text-align: center;
+    font-size: {tmpl["html_contact_size"]};
+    color: {tmpl["html_muted"]};
+    text-align: {name_align};
     margin-bottom: 10px;
   }}
-  .resume-contact a {{ color: #445566; text-decoration: none; }}
+  .resume-contact a {{ color: {tmpl["html_muted"]}; text-decoration: none; }}
   .header-rule {{
     border: none;
-    border-top: 1.5px solid #1a375e;
+    border-top: 1.5px solid {tmpl["html_rule"]};
     margin-bottom: 14px;
   }}
   /* Sections */
   .section {{ margin-bottom: 16px; }}
   .section-heading {{
-    font-size: 9pt;
+    font-size: {tmpl["html_section_size"]};
     font-weight: 700;
-    color: #1a375e;
+    color: {tmpl["html_heading"]};
     letter-spacing: 0.08em;
     margin-bottom: 2px;
     margin-top: 4px;
   }}
   .section-rule {{
-    border-top: 1px solid #1a375e;
+    border-top: 1px solid {tmpl["html_rule"]};
     margin-bottom: 8px;
   }}
   .body-text {{
-    font-size: 10.5pt;
+    font-size: {tmpl["html_body_size"]};
     line-height: 1.4;
     color: #222;
   }}
@@ -513,13 +635,13 @@ class ResumeBuilder:
     justify-content: space-between;
     align-items: baseline;
   }}
-  .exp-title  {{ font-weight: 700; font-size: 10.5pt; }}
-  .exp-dates  {{ font-size: 10pt; color: #445566; }}
-  .exp-sub    {{ font-style: italic; color: #445566; font-size: 10pt; margin-bottom: 4px; }}
+  .exp-title  {{ font-weight: 700; font-size: {tmpl["html_body_size"]}; color: {tmpl["html_heading"]}; }}
+  .exp-dates  {{ font-size: 10pt; color: {tmpl["html_muted"]}; }}
+  .exp-sub    {{ font-style: italic; color: {tmpl["html_muted"]}; font-size: 10pt; margin-bottom: 4px; }}
   .exp-bullets {{
     margin-left: 1.1em;
     padding-left: 0.5em;
-    font-size: 10.5pt;
+    font-size: {tmpl["html_body_size"]};
     line-height: 1.5;
   }}
   .exp-bullets li {{ margin-bottom: 2px; }}
@@ -530,9 +652,9 @@ class ResumeBuilder:
     justify-content: space-between;
     align-items: baseline;
   }}
-  .edu-degree {{ font-weight: 700; font-size: 10.5pt; }}
-  .edu-year   {{ font-size: 10pt; color: #445566; }}
-  .edu-inst   {{ font-style: italic; color: #445566; font-size: 10pt; }}
+  .edu-degree {{ font-weight: 700; font-size: {tmpl["html_body_size"]}; color: {tmpl["html_heading"]}; }}
+  .edu-year   {{ font-size: 10pt; color: {tmpl["html_muted"]}; }}
+  .edu-inst   {{ font-style: italic; color: {tmpl["html_muted"]}; font-size: 10pt; }}
 </style>
 </head>
 <body>
@@ -587,8 +709,9 @@ if __name__ == '__main__':
         "technical_skills": ["Python", "JavaScript", "PostgreSQL", "Docker", "Kubernetes"]
     }
     builder = ResumeBuilder()
-    builder.build_word_document('/tmp/test_resume.docx', sample)
-    html_out = builder.build_html_preview(sample)
-    with open('/tmp/test_resume.html', 'w') as f:
-        f.write(html_out)
-    print("Smoke test complete. Files: /tmp/test_resume.docx, /tmp/test_resume.html")
+    for tid in ["modern", "classic", "creative", "minimal"]:
+        builder.build_word_document(f'/tmp/test_resume_{tid}.docx', sample, tid)
+        html_out = builder.build_html_preview(sample, tid)
+        with open(f'/tmp/test_resume_{tid}.html', 'w') as f:
+            f.write(html_out)
+        print(f"Smoke test complete for template: {tid}")

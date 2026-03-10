@@ -574,3 +574,110 @@
     border: 1px solid #fecaca;
     border-radius: 4px;
 }
+
+/* ── Template Selector ────────────────────────────────────────────────────── */
+.gen-templates {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-top: 8px;
+}
+
+.gen-template-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    background: #fff;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 14px 12px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.gen-template-card:hover {
+    border-color: #93c5fd;
+    box-shadow: 0 2px 8px rgba(3, 105, 161, 0.1);
+}
+
+.gen-template-card--active {
+    border-color: #0369a1;
+    box-shadow: 0 0 0 3px rgba(3, 105, 161, 0.12);
+}
+
+/* Mini document thumbnail */
+.gen-template-thumb {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    min-height: 90px;
+}
+
+.gen-template-thumb__name {
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-align: center;
+    margin-bottom: 3px;
+}
+
+.gen-template-thumb__rule {
+    border-top: 1.5px solid;
+    margin-bottom: 5px;
+}
+
+.gen-template-thumb__section {
+    font-size: 6pt;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    margin-bottom: 2px;
+}
+
+.gen-template-thumb__rule--section {
+    border-top-width: 1px;
+    margin-bottom: 4px;
+}
+
+.gen-template-thumb__text {
+    background: #cbd5e1;
+    height: 4px;
+    border-radius: 2px;
+    margin-bottom: 3px;
+}
+
+.gen-template-thumb__text--short {
+    width: 65%;
+}
+
+/* Card label */
+.gen-template-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.gen-template-name {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.gen-template-desc {
+    font-size: 0.76rem;
+    color: #64748b;
+    line-height: 1.35;
+}
+
+/* Active checkmark */
+.gen-template-check {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    font-size: 0.85rem;
+    color: #0369a1;
+    font-weight: 700;
+}

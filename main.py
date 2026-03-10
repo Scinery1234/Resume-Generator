@@ -15,7 +15,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from database import get_db, init_db
 from models import User, Resume
-from doc_builder import ResumeBuilder
+from doc_builder import ResumeBuilder, TEMPLATE_LIST
 from prompts import SYSTEM_PROMPT_DRAFT, SYSTEM_PROMPT_GENERATE, create_resume_prompt, build_generate_prompt
 from utils import (
     sanitize_filename, validate_file_extension, get_max_prompts_for_tier,
@@ -327,6 +327,7 @@ async def generate_from_documents(
     files: List[UploadFile] = File(default=[]),
     job_description: str = Form(...),
     additional_info: str = Form(default=""),
+    template: str = Form(default="modern"),
     user_id: Optional[int] = Form(default=None),  # Optional user ID for logged-in users
     db: Session = Depends(get_db),
 ):
@@ -420,10 +421,10 @@ async def generate_from_documents(
     # Sanitize filename (though UUID should be safe, this is defensive)
     safe_filename = sanitize_filename(resume_filename)
     resume_path = RESUMES_DIR / safe_filename
-    resume_builder.build_word_document(str(resume_path), resume_data)
+    resume_builder.build_word_document(str(resume_path), resume_data, template_id=template)
 
     # Build the HTML preview
-    preview_html = resume_builder.build_html_preview(resume_data)
+    preview_html = resume_builder.build_html_preview(resume_data, template_id=template)
 
     # Save resume to database if user is logged in
     resume_id = None
@@ -845,12 +846,7 @@ async def get_templates():
     """Get available resume templates"""
     return {
         "status": "success",
-        "templates": [
-            {"id": 1, "name": "Modern", "description": "Clean and modern design"},
-            {"id": 2, "name": "Classic", "description": "Traditional professional format"},
-            {"id": 3, "name": "Creative", "description": "Creative and colorful design"},
-            {"id": 4, "name": "Minimal", "description": "Minimalist design"}
-        ]
+        "templates": TEMPLATE_LIST,
     }
 
 if __name__ == "__main__":
