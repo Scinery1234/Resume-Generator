@@ -296,26 +296,33 @@ function ResultView({ result, onReset, onUpdate }) {
 }
 
 // ── Template definitions ──────────────────────────────────────────────────────
-// `preview` drives the TemplatePreviewMini component — every key maps to a real
-// CSS value that matches the backend template config exactly.
+// Three structural layouts:
+//   A – single column  (classic, minimal)
+//   B – two-column sidebar  (modern, executive)
+//   C – full-width header band  (creative)
 const TEMPLATES = [
     {
         id: 'modern',
         name: 'Modern',
-        description: 'Clean navy-blue design — polished and professional.',
+        description: 'Navy sidebar with contact & skills panel — polished and professional.',
+        layout: 'B',
         preview: {
             headingColor: '#1a375e',
             ruleColor:    '#1a375e',
             mutedColor:   '#445566',
             fontFamily:   "Calibri, 'Segoe UI', Arial, sans-serif",
-            nameAlign:    'center',
-            namePx:       14,
+            nameAlign:    'left',
+            namePx:       13,
+            sidebarBg:    '#1a375e',
+            sidebarText:  '#e8f0f8',
+            sidebarRule:  '#4a7aae',
         },
     },
     {
         id: 'classic',
         name: 'Classic',
-        description: 'Traditional serif format — timeless and formal.',
+        description: 'Traditional serif single-column — timeless and formal.',
+        layout: 'A',
         preview: {
             headingColor: '#1a1a1a',
             ruleColor:    '#333333',
@@ -328,20 +335,24 @@ const TEMPLATES = [
     {
         id: 'creative',
         name: 'Creative',
-        description: 'Purple & teal accents — bold and contemporary.',
+        description: 'Purple header band with teal accents — bold and contemporary.',
+        layout: 'C',
         preview: {
             headingColor: '#6b21a8',
             ruleColor:    '#0891b2',
             mutedColor:   '#4b5563',
             fontFamily:   "Calibri, 'Segoe UI', Arial, sans-serif",
             nameAlign:    'left',
-            namePx:       16,
+            namePx:       14,
+            headerBg:     '#6b21a8',
+            headerText:   '#ffffff',
         },
     },
     {
         id: 'minimal',
         name: 'Minimal',
-        description: 'Light-gray rules — understated and elegant.',
+        description: 'Light-gray rules, single column — understated and elegant.',
+        layout: 'A',
         preview: {
             headingColor: '#374151',
             ruleColor:    '#d1d5db',
@@ -354,108 +365,236 @@ const TEMPLATES = [
     {
         id: 'executive',
         name: 'Executive',
-        description: 'Charcoal headings with amber-gold rules — sharp and authoritative.',
+        description: 'Charcoal sidebar with amber-gold rules — sharp and authoritative.',
+        layout: 'B',
         preview: {
             headingColor: '#1c1c2e',
             ruleColor:    '#b45309',
             mutedColor:   '#525252',
             fontFamily:   "Calibri, 'Segoe UI', Arial, sans-serif",
             nameAlign:    'left',
-            namePx:       15,
+            namePx:       13,
+            sidebarBg:    '#1c1c2e',
+            sidebarText:  '#f0f0f0',
+            sidebarRule:  '#b45309',
         },
     },
 ];
 
-// ── Mini resume preview ───────────────────────────────────────────────────────
-// Renders a miniature but fully styled resume at a size designed for the card.
-// Uses inline styles pulled directly from the template's preview config, so
-// heading colour, rule colour, font family, and name alignment are all accurate.
+// ── Mini resume preview helpers ───────────────────────────────────────────────
+
+/** Section heading + rule used inside Layout A and C mini previews. */
 function PreviewSection({ label, p, children }) {
     return (
-        <div style={{ marginBottom: 7 }}>
+        <div style={{ marginBottom: 6 }}>
             <div style={{
-                fontFamily: p.fontFamily, fontSize: 7, fontWeight: 700,
+                fontFamily: p.fontFamily, fontSize: 6.5, fontWeight: 700,
                 color: p.headingColor, letterSpacing: '0.07em', marginBottom: 2,
             }}>
                 {label}
             </div>
-            <div style={{ borderTop: `1px solid ${p.ruleColor}`, marginBottom: 4 }} />
+            <div style={{ borderTop: `1px solid ${p.ruleColor}`, marginBottom: 3 }} />
             {children}
         </div>
     );
 }
 
-function TemplatePreviewMini({ t }) {
-    const p = t.preview;
-    const body = { fontFamily: p.fontFamily, fontSize: 8, color: '#2a2a2a', lineHeight: 1.35 };
-    const muted = { fontFamily: p.fontFamily, fontSize: 7, fontStyle: 'italic', color: p.mutedColor };
-    const bold  = { fontFamily: p.fontFamily, fontSize: 8.5, fontWeight: 700, color: p.headingColor };
+/** Section heading + rule used inside the Layout B sidebar. */
+function SidebarSection({ label, p, children }) {
+    return (
+        <div style={{ marginBottom: 8 }}>
+            <div style={{
+                fontSize: 6, fontWeight: 700, color: p.sidebarText,
+                letterSpacing: '0.1em', marginBottom: 2,
+            }}>
+                {label}
+            </div>
+            <div style={{ borderTop: `1px solid ${p.sidebarRule}`, marginBottom: 4 }} />
+            {children}
+        </div>
+    );
+}
+
+/** Layout A mini preview – single column */
+function PreviewMiniA({ p }) {
+    const body  = { fontFamily: p.fontFamily, fontSize: 7.5, color: '#2a2a2a', lineHeight: 1.35 };
+    const muted = { fontFamily: p.fontFamily, fontSize: 6.5, fontStyle: 'italic', color: p.mutedColor };
+    const bold  = { fontFamily: p.fontFamily, fontSize: 8, fontWeight: 700, color: p.headingColor };
 
     return (
-        <div style={{ padding: '13px 13px 10px', background: '#fff', fontFamily: p.fontFamily }}>
-            {/* ── Name ── */}
-            <div style={{
-                fontSize: p.namePx, fontWeight: 700, color: p.headingColor,
-                textAlign: p.nameAlign, letterSpacing: '0.04em', marginBottom: 2,
-            }}>
+        <div style={{ padding: '12px 12px 8px', background: '#fff', fontFamily: p.fontFamily }}>
+            <div style={{ fontSize: p.namePx, fontWeight: 700, color: p.headingColor,
+                textAlign: p.nameAlign, letterSpacing: '0.04em', marginBottom: 2 }}>
                 ALEX JOHNSON
             </div>
-
-            {/* ── Contact ── */}
-            <div style={{
-                fontSize: 7, color: p.mutedColor,
-                textAlign: p.nameAlign, marginBottom: 6,
-            }}>
+            <div style={{ fontSize: 6.5, color: p.mutedColor, textAlign: p.nameAlign, marginBottom: 5 }}>
                 0412 345 678 · alex@email.com · Sydney NSW
             </div>
+            <div style={{ borderTop: `1.5px solid ${p.ruleColor}`, marginBottom: 6 }} />
 
-            {/* ── Header rule ── */}
-            <div style={{ borderTop: `1.5px solid ${p.ruleColor}`, marginBottom: 7 }} />
-
-            {/* ── Professional Summary ── */}
             <PreviewSection label="PROFESSIONAL SUMMARY" p={p}>
-                <div style={{ ...body, marginBottom: 0 }}>
+                <div style={{ ...body }}>
                     Results-driven engineer with 6+ years delivering scalable web applications
-                    and leading high-performing teams across the fintech sector.
+                    and leading high-performing teams.
                 </div>
             </PreviewSection>
 
-            {/* ── Work Experience ── */}
             <PreviewSection label="WORK EXPERIENCE" p={p}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
                     <span style={bold}>Senior Software Engineer</span>
-                    <span style={{ fontFamily: p.fontFamily, fontSize: 6.5, color: p.mutedColor }}>2021 – Present</span>
+                    <span style={{ fontSize: 6, color: p.mutedColor }}>2021 – Present</span>
                 </div>
-                <div style={{ ...muted, marginBottom: 4 }}>Atlassian  |  Sydney NSW</div>
-                <div style={{ ...body, paddingLeft: 8, marginBottom: 2 }}>• Led microservices platform for 2M+ daily users</div>
-                <div style={{ ...body, paddingLeft: 8, marginBottom: 4 }}>• Reduced API response time by 40%</div>
-
+                <div style={{ ...muted, marginBottom: 3 }}>Atlassian  |  Sydney NSW</div>
+                <div style={{ ...body, paddingLeft: 7, marginBottom: 1 }}>• Led microservices platform for 2M+ users</div>
+                <div style={{ ...body, paddingLeft: 7, marginBottom: 4 }}>• Reduced API response time by 40%</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
-                    <span style={{ ...bold, fontSize: 8 }}>Software Engineer</span>
-                    <span style={{ fontFamily: p.fontFamily, fontSize: 6.5, color: p.mutedColor }}>2018 – 2021</span>
+                    <span style={{ ...bold, fontSize: 7.5 }}>Software Engineer</span>
+                    <span style={{ fontSize: 6, color: p.mutedColor }}>2018 – 2021</span>
                 </div>
-                <div style={{ ...muted, marginBottom: 4 }}>Canva  |  Sydney NSW</div>
-                <div style={{ ...body, paddingLeft: 8, marginBottom: 2 }}>• Built real-time collaboration features for 5M+ users</div>
-                <div style={{ ...body, paddingLeft: 8 }}>• Implemented test framework, cutting QA time by 35%</div>
+                <div style={{ ...muted, marginBottom: 3 }}>Canva  |  Sydney NSW</div>
+                <div style={{ ...body, paddingLeft: 7 }}>• Built real-time collaboration for 5M+ users</div>
             </PreviewSection>
 
-            {/* ── Education ── */}
             <PreviewSection label="EDUCATION" p={p}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
-                    <span style={{ ...bold, fontSize: 8 }}>Bachelor of Computer Science</span>
-                    <span style={{ fontFamily: p.fontFamily, fontSize: 6.5, color: p.mutedColor }}>2018</span>
+                    <span style={{ ...bold, fontSize: 7.5 }}>Bachelor of Computer Science</span>
+                    <span style={{ fontSize: 6, color: p.mutedColor }}>2018</span>
                 </div>
                 <div style={{ ...muted }}>University of New South Wales</div>
             </PreviewSection>
 
-            {/* ── Key Skills ── */}
             <PreviewSection label="KEY SKILLS" p={p}>
-                <div style={{ ...body }}>
-                    Python · TypeScript · React · AWS · Docker · CI/CD · Agile
-                </div>
+                <div style={{ ...body }}>Python · TypeScript · React · AWS · Docker</div>
             </PreviewSection>
         </div>
     );
+}
+
+/** Layout B mini preview – two-column sidebar */
+function PreviewMiniB({ p }) {
+    const sbItem = { fontSize: 6.5, color: p.sidebarText, marginBottom: 2, lineHeight: 1.3, wordBreak: 'break-all' };
+    const body   = { fontFamily: p.fontFamily, fontSize: 7.5, color: '#2a2a2a', lineHeight: 1.35 };
+    const muted  = { fontFamily: p.fontFamily, fontSize: 6.5, fontStyle: 'italic', color: p.mutedColor };
+    const bold   = { fontFamily: p.fontFamily, fontSize: 8, fontWeight: 700, color: p.headingColor };
+
+    return (
+        <div style={{ display: 'flex', background: '#fff', fontFamily: p.fontFamily, minHeight: '100%' }}>
+            {/* ── Sidebar ── */}
+            <div style={{ width: '33%', background: p.sidebarBg, padding: '12px 7px 12px 9px', flexShrink: 0 }}>
+                <div style={{ fontSize: p.namePx, fontWeight: 700, color: p.sidebarText,
+                    letterSpacing: '0.03em', marginBottom: 10, lineHeight: 1.2 }}>
+                    ALEX JOHNSON
+                </div>
+
+                <SidebarSection label="CONTACT" p={p}>
+                    <div style={sbItem}>0412 345 678</div>
+                    <div style={sbItem}>alex@email.com</div>
+                    <div style={sbItem}>Sydney NSW</div>
+                </SidebarSection>
+
+                <SidebarSection label="KEY SKILLS" p={p}>
+                    {['Python', 'TypeScript', 'React', 'AWS', 'Docker'].map(s => (
+                        <div key={s} style={sbItem}>  {s}</div>
+                    ))}
+                </SidebarSection>
+
+                <SidebarSection label="EDUCATION" p={p}>
+                    <div style={{ ...sbItem, fontWeight: 600 }}>B. Computer Science</div>
+                    <div style={{ ...sbItem, fontStyle: 'italic', opacity: 0.85, fontSize: 6 }}>UNSW · 2018</div>
+                </SidebarSection>
+            </div>
+
+            {/* ── Main ── */}
+            <div style={{ flex: 1, padding: '12px 9px 8px 8px', minWidth: 0 }}>
+                <div style={{ marginBottom: 6 }}>
+                    <div style={{ fontSize: 6.5, fontWeight: 700, color: p.headingColor, letterSpacing: '0.07em', marginBottom: 2 }}>
+                        PROFESSIONAL SUMMARY
+                    </div>
+                    <div style={{ borderTop: `1px solid ${p.ruleColor}`, marginBottom: 3 }} />
+                    <div style={{ ...body }}>Results-driven engineer with 6+ years delivering scalable web applications.</div>
+                </div>
+
+                <div>
+                    <div style={{ fontSize: 6.5, fontWeight: 700, color: p.headingColor, letterSpacing: '0.07em', marginBottom: 2 }}>
+                        WORK EXPERIENCE
+                    </div>
+                    <div style={{ borderTop: `1px solid ${p.ruleColor}`, marginBottom: 3 }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
+                        <span style={bold}>Senior Software Engineer</span>
+                        <span style={{ fontSize: 6, color: p.mutedColor }}>2021–Present</span>
+                    </div>
+                    <div style={{ ...muted, marginBottom: 2 }}>Atlassian  |  Sydney NSW</div>
+                    <div style={{ ...body, paddingLeft: 7, marginBottom: 1 }}>• Led microservices for 2M+ users</div>
+                    <div style={{ ...body, paddingLeft: 7, marginBottom: 4 }}>• Reduced API time by 40%</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
+                        <span style={{ ...bold, fontSize: 7.5 }}>Software Engineer</span>
+                        <span style={{ fontSize: 6, color: p.mutedColor }}>2018–2021</span>
+                    </div>
+                    <div style={{ ...muted, marginBottom: 2 }}>Canva  |  Sydney NSW</div>
+                    <div style={{ ...body, paddingLeft: 7 }}>• Built real-time collaboration for 5M+ users</div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/** Layout C mini preview – full-width header band */
+function PreviewMiniC({ p }) {
+    const body  = { fontFamily: p.fontFamily, fontSize: 7.5, color: '#2a2a2a', lineHeight: 1.35 };
+    const muted = { fontFamily: p.fontFamily, fontSize: 6.5, fontStyle: 'italic', color: p.mutedColor };
+    const bold  = { fontFamily: p.fontFamily, fontSize: 8, fontWeight: 700, color: p.headingColor };
+
+    return (
+        <div style={{ background: '#fff', fontFamily: p.fontFamily }}>
+            {/* ── Header band ── */}
+            <div style={{ background: p.headerBg, padding: '10px 12px 8px' }}>
+                <div style={{ fontSize: p.namePx, fontWeight: 700, color: p.headerText,
+                    letterSpacing: '0.04em', marginBottom: 3 }}>
+                    ALEX JOHNSON
+                </div>
+                <div style={{ fontSize: 6.5, color: 'rgba(255,255,255,0.85)' }}>
+                    0412 345 678 · alex@email.com · Sydney NSW
+                </div>
+            </div>
+
+            {/* ── Body ── */}
+            <div style={{ padding: '8px 12px 8px' }}>
+                <PreviewSection label="PROFESSIONAL SUMMARY" p={p}>
+                    <div style={{ ...body }}>
+                        Results-driven engineer with 6+ years delivering scalable web applications
+                        and leading high-performing teams.
+                    </div>
+                </PreviewSection>
+
+                <PreviewSection label="WORK EXPERIENCE" p={p}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
+                        <span style={bold}>Senior Software Engineer</span>
+                        <span style={{ fontSize: 6, color: p.mutedColor }}>2021 – Present</span>
+                    </div>
+                    <div style={{ ...muted, marginBottom: 3 }}>Atlassian  |  Sydney NSW</div>
+                    <div style={{ ...body, paddingLeft: 7, marginBottom: 1 }}>• Led microservices for 2M+ daily users</div>
+                    <div style={{ ...body, paddingLeft: 7, marginBottom: 4 }}>• Reduced API response time by 40%</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
+                        <span style={{ ...bold, fontSize: 7.5 }}>Software Engineer</span>
+                        <span style={{ fontSize: 6, color: p.mutedColor }}>2018 – 2021</span>
+                    </div>
+                    <div style={{ ...muted, marginBottom: 3 }}>Canva  |  Sydney NSW</div>
+                    <div style={{ ...body, paddingLeft: 7 }}>• Built real-time collaboration for 5M+ users</div>
+                </PreviewSection>
+
+                <PreviewSection label="KEY SKILLS" p={p}>
+                    <div style={{ ...body }}>Python · TypeScript · React · AWS · Docker</div>
+                </PreviewSection>
+            </div>
+        </div>
+    );
+}
+
+/** Dispatch to the correct mini preview component based on template layout. */
+function TemplatePreviewMini({ t }) {
+    if (t.layout === 'B') return <PreviewMiniB p={t.preview} />;
+    if (t.layout === 'C') return <PreviewMiniC p={t.preview} />;
+    return <PreviewMiniA p={t.preview} />;
 }
 
 // ── Template carousel (shown before generation) ────────────────────────────
