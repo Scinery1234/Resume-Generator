@@ -20,7 +20,7 @@ from prompts import SYSTEM_PROMPT_DRAFT, SYSTEM_PROMPT_GENERATE, create_resume_p
 from utils import (
     sanitize_filename, validate_file_extension, get_max_prompts_for_tier,
     handle_database_error, standardize_response, validate_user_id,
-    MAX_FILES, MAX_FILE_SIZE, ALLOWED_EXTENSIONS
+    MAX_FILES, MAX_FILE_SIZE, ALLOWED_EXTENSIONS, MAX_PROMPTS_GUEST
 )
 import uuid
 
@@ -426,25 +426,25 @@ async def generate_from_documents(
     # Build the HTML preview
     preview_html = resume_builder.build_html_preview(resume_data, template_id=template)
 
-    # Save resume to database if user is logged in
+    # Always save the resume to the database (user_id=None for guests) so that
+    # the resume_id can be used for AI-powered edits without requiring login.
     resume_id = None
-    if user_id:
-        try:
-            resume_record = Resume(
-                user_id=user_id,
-                name=resume_data.get("name", "Untitled Resume"),
-                file_path=str(resume_path),
-                contact_info=json.dumps(resume_data.get("contact", {})),
-                resume_data=json.dumps(resume_data),
-                preview_html=preview_html,
-            )
-            db.add(resume_record)
-            db.commit()
-            db.refresh(resume_record)
-            resume_id = resume_record.id
-        except Exception as e:
-            logger.error(f"Error saving resume to database: {e}")
-            db.rollback()
+    try:
+        resume_record = Resume(
+            user_id=user_id,  # NULL for guest resumes
+            name=resume_data.get("name", "Untitled Resume"),
+            file_path=str(resume_path),
+            contact_info=json.dumps(resume_data.get("contact", {})),
+            resume_data=json.dumps(resume_data),
+            preview_html=preview_html,
+        )
+        db.add(resume_record)
+        db.commit()
+        db.refresh(resume_record)
+        resume_id = resume_record.id
+    except Exception as e:
+        logger.error(f"Error saving resume to database: {e}")
+        db.rollback()
 
     logger.info("Resume generated: %s (name: %s)", safe_filename, resume_data.get("name", "unknown"))
     return standardize_response({
@@ -703,27 +703,41 @@ async def upload_resume(file: UploadFile = File(...)):
 async def edit_resume_with_prompt(
     resume_id: int,
     prompt: str = Form(...),
-    user_id: int = Form(...),
+    user_id: Optional[int] = Form(default=None),
     db: Session = Depends(get_db),
 ):
-    """Edit a resume using a text prompt. Checks prompt count limits."""
-    # Get user and check membership
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Check prompt limits
-    max_prompts = get_max_prompts_for_tier(user.membership_tier)
-    if user.prompt_count >= max_prompts:
-        raise HTTPException(
-            status_code=403,
-            detail=f"You've reached your prompt limit ({max_prompts}). Upgrade to Pro for 10x more prompts!"
-        )
-    
-    # Get resume
-    resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id == user_id).first()
-    if not resume:
-        raise HTTPException(status_code=404, detail="Resume not found")
+    """Edit a resume using a text prompt. Checks prompt count limits.
+
+    Guests (no user_id) may edit their resume up to MAX_PROMPTS_GUEST times.
+    Logged-in users are limited by their membership tier.
+    """
+    if user_id:
+        # ── Logged-in user ────────────────────────────────────────────────
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        max_prompts = get_max_prompts_for_tier(user.membership_tier)
+        if user.prompt_count >= max_prompts:
+            raise HTTPException(
+                status_code=403,
+                detail=f"You've reached your prompt limit ({max_prompts}). Upgrade to Pro for more edits!"
+            )
+
+        resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id == user_id).first()
+        if not resume:
+            raise HTTPException(status_code=404, detail="Resume not found")
+    else:
+        # ── Guest ─────────────────────────────────────────────────────────
+        resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id.is_(None)).first()
+        if not resume:
+            raise HTTPException(status_code=404, detail="Resume not found")
+
+        if (resume.guest_edit_count or 0) >= MAX_PROMPTS_GUEST:
+            raise HTTPException(
+                status_code=403,
+                detail=f"You've used all {MAX_PROMPTS_GUEST} free edits. Sign up for a paid plan to get 50 edits!"
+            )
     
     if not resume.resume_data:
         raise HTTPException(status_code=400, detail="Resume data not available for editing")
@@ -769,19 +783,29 @@ Return ONLY the updated JSON object — no other text."""
         resume.preview_html = preview_html
         resume.file_path = str(resume_path)
         resume.updated_at = datetime.utcnow()
-        
-        # Increment prompt count
-        user.prompt_count += 1
-        
+
+        # Increment the appropriate counter and build the remaining-edits info
+        if user_id:
+            user.prompt_count += 1
+            prompt_count = user.prompt_count
+            remaining = max(0, max_prompts - prompt_count)
+        else:
+            resume.guest_edit_count = (resume.guest_edit_count or 0) + 1
+            prompt_count = resume.guest_edit_count
+            max_prompts = MAX_PROMPTS_GUEST
+            remaining = max(0, MAX_PROMPTS_GUEST - prompt_count)
+
         db.commit()
         db.refresh(resume)
-        
+
         return {
             "status": "success",
             "preview_html": preview_html,
             "data": updated_data,
-            "prompt_count": user.prompt_count,
+            "prompt_count": prompt_count,
             "max_prompts": max_prompts,
+            "remaining_prompts": remaining,
+            "filename": Path(resume.file_path).name if resume.file_path else None,
         }
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="AI returned invalid format")
@@ -831,7 +855,7 @@ async def get_prompt_info(user_id: int, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    max_prompts = 10 if user.membership_tier == 'free' else 100 if user.membership_tier == 'pro' else 1000
+    max_prompts = get_max_prompts_for_tier(user.membership_tier)
     
     return {
         "prompt_count": user.prompt_count,

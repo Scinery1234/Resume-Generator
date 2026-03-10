@@ -4,7 +4,8 @@ Tests for utility functions in utils.py
 import pytest
 from utils import (
     sanitize_filename, validate_file_extension, get_max_prompts_for_tier,
-    validate_user_id, MAX_FILES, MAX_PROMPTS_FREE, MAX_PROMPTS_PRO
+    validate_user_id, MAX_FILES,
+    MAX_PROMPTS_GUEST, MAX_PROMPTS_FREE, MAX_PROMPTS_PRO, MAX_PROMPTS_ENTERPRISE,
 )
 
 
@@ -46,15 +47,22 @@ class TestValidateFileExtension:
 
 
 class TestGetMaxPromptsForTier:
+    def test_guest_tier(self):
+        assert get_max_prompts_for_tier("guest") == MAX_PROMPTS_GUEST
+        assert MAX_PROMPTS_GUEST == 3
+
     def test_free_tier(self):
         assert get_max_prompts_for_tier("free") == MAX_PROMPTS_FREE
-    
+        assert MAX_PROMPTS_FREE == 3
+
     def test_pro_tier(self):
         assert get_max_prompts_for_tier("pro") == MAX_PROMPTS_PRO
-    
+        assert MAX_PROMPTS_PRO == 50
+
     def test_enterprise_tier(self):
-        assert get_max_prompts_for_tier("enterprise") == 1000
-    
+        assert get_max_prompts_for_tier("enterprise") == MAX_PROMPTS_ENTERPRISE
+        assert MAX_PROMPTS_ENTERPRISE == 50
+
     def test_unknown_tier_defaults_to_free(self):
         assert get_max_prompts_for_tier("unknown") == MAX_PROMPTS_FREE
         assert get_max_prompts_for_tier("") == MAX_PROMPTS_FREE

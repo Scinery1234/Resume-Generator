@@ -223,10 +223,10 @@ export const resumeAPI = {
     return response.data;
   },
   
-  editWithPrompt: async (resumeId, prompt, userId) => {
+  editWithPrompt: async (resumeId, prompt, userId = null) => {
     const formData = new FormData();
     formData.append('prompt', prompt);
-    formData.append('user_id', userId);
+    if (userId) formData.append('user_id', userId);
     const response = await fetch(`${API_BASE_URL}/api/resumes/${resumeId}/edit`, {
       method: 'POST',
       body: formData,

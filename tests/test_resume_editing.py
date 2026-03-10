@@ -57,10 +57,9 @@ class TestResumeEditing:
     
     def test_edit_exceeds_prompt_limit_returns_403(self):
         """Test that exceeding prompt limit returns 403"""
-        # Would need user with max prompts
-        # Verify the check exists in code
-        from utils import get_max_prompts_for_tier
-        assert get_max_prompts_for_tier("free") == 10
+        # Verify the check exists and returns the configured free-tier limit
+        from utils import get_max_prompts_for_tier, MAX_PROMPTS_FREE
+        assert get_max_prompts_for_tier("free") == MAX_PROMPTS_FREE
 
 
 class TestInlineEditing:

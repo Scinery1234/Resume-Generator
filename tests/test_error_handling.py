@@ -83,9 +83,7 @@ class TestDatabaseErrorHandling:
 
 class TestPromptLimitEnforcement:
     def test_prompt_limit_check(self):
-        """Test that prompt limits are enforced"""
-        # This would require setting up a user with max prompts
-        # For now, verify the function exists
-        from utils import get_max_prompts_for_tier
-        assert get_max_prompts_for_tier("free") == 10
-        assert get_max_prompts_for_tier("pro") == 100
+        """Prompt limits match the configured tier constants."""
+        from utils import get_max_prompts_for_tier, MAX_PROMPTS_FREE, MAX_PROMPTS_PRO
+        assert get_max_prompts_for_tier("free") == MAX_PROMPTS_FREE
+        assert get_max_prompts_for_tier("pro") == MAX_PROMPTS_PRO

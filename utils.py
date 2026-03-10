@@ -14,9 +14,10 @@ logger = logging.getLogger(__name__)
 MAX_FILES = 5
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 ALLOWED_EXTENSIONS = {'.pdf', '.doc', '.docx', '.txt'}
-MAX_PROMPTS_FREE = 10
-MAX_PROMPTS_PRO = 100
-MAX_PROMPTS_ENTERPRISE = 1000
+MAX_PROMPTS_GUEST = 3        # Edits allowed without an account
+MAX_PROMPTS_FREE = 3         # Same cap for free-tier accounts
+MAX_PROMPTS_PRO = 50         # Paid tier
+MAX_PROMPTS_ENTERPRISE = 50  # Enterprise tier
 
 
 def sanitize_filename(filename: str) -> str:
@@ -52,6 +53,7 @@ def validate_file_extension(filename: str) -> bool:
 def get_max_prompts_for_tier(tier: str) -> int:
     """Get maximum prompts allowed for a membership tier."""
     tier_map = {
+        'guest': MAX_PROMPTS_GUEST,
         'free': MAX_PROMPTS_FREE,
         'pro': MAX_PROMPTS_PRO,
         'enterprise': MAX_PROMPTS_ENTERPRISE,

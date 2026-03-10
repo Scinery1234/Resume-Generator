@@ -114,5 +114,8 @@ class Resume(Base):
     # Pre-rendered HTML stored to avoid rebuilding the preview on every request
     preview_html = Column(Text)
 
+    # Number of AI edits consumed by a guest (no account) on this resume
+    guest_edit_count = Column(Integer, default=0)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
