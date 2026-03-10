@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './WizardPage.css';
-import { resumeAPI } from '../services/api';
+import { resumeAPI, templateAPI } from '../services/api';
 import { downloadBlob } from '../utils/fileDownload';
 
 const MAX_FILES = 5;
@@ -21,6 +21,9 @@ function fileIcon(filename) {
 }
 
 // ── Result view ──────────────────────────────────────────────────────────────
+const GUEST_MAX_EDITS = 3;
+const PAID_MAX_EDITS  = 50;
+
 function ResultView({ result, onReset, onUpdate }) {
     const [downloading, setDownloading] = useState(false);
     const [downloadError, setDownloadError] = useState('');
@@ -30,24 +33,33 @@ function ResultView({ result, onReset, onUpdate }) {
     const [promptInfo, setPromptInfo] = useState(null);
     const [isEditingInline, setIsEditingInline] = useState(false);
     const [jsonText, setJsonText] = useState(() => JSON.stringify(result.data || {}, null, 2));
-    
+    const [activeTemplate, setActiveTemplate] = useState(result.template || 'modern');
+    const [switchingTemplate, setSwitchingTemplate] = useState(false);
+
     const userId = localStorage.getItem('userId');
-    const token = localStorage.getItem('token');
+    const token  = localStorage.getItem('token');
     const isGuest = !token || !userId;
-    
-    // Load prompt info if logged in and update JSON text when result changes
+
+    // Load prompt info for logged-in users; update JSON when result data changes
     useEffect(() => {
         if (!isGuest && userId && result.resume_id) {
             resumeAPI.getPromptInfo(userId)
                 .then(info => setPromptInfo(info))
                 .catch(err => console.error('Failed to load prompt info:', err));
         }
-        // Update JSON text when result data changes
         if (result.data) {
             setJsonText(JSON.stringify(result.data, null, 2));
         }
     }, [isGuest, userId, result.resume_id, result.data]);
-    
+
+    // Derive remaining edits for display
+    const editsUsed      = promptInfo ? promptInfo.prompt_count      : 0;
+    const editsMax       = isGuest ? GUEST_MAX_EDITS : (promptInfo ? promptInfo.max_prompts : GUEST_MAX_EDITS);
+    const editsRemaining = isGuest
+        ? (promptInfo ? promptInfo.remaining_prompts : GUEST_MAX_EDITS)
+        : (promptInfo ? promptInfo.remaining_prompts : null);
+    const editsExhausted = editsRemaining !== null && editsRemaining <= 0;
+
     const handleDownload = async () => {
         setDownloading(true);
         setDownloadError('');
@@ -60,72 +72,76 @@ function ResultView({ result, onReset, onUpdate }) {
             setDownloading(false);
         }
     };
-    
+
     const handleEditWithPrompt = async () => {
         if (!editPrompt.trim()) return;
-        if (isGuest) {
-            setEditError('Please log in to edit your resume.');
-            return;
-        }
         if (!result.resume_id) {
-            setEditError('Resume must be saved to edit. Please log in and generate again.');
+            setEditError('Resume ID missing — please regenerate your resume.');
             return;
         }
-        
+
         setEditing(true);
         setEditError('');
         try {
-            const response = await resumeAPI.editWithPrompt(result.resume_id, editPrompt, userId);
-            setEditedData(response.data);
+            const response = await resumeAPI.editWithPrompt(
+                result.resume_id,
+                editPrompt,
+                isGuest ? null : userId,
+            );
             if (onUpdate) onUpdate(response);
             setEditPrompt('');
-            setPromptInfo(response);
+            setPromptInfo(response);  // server returns prompt_count / max_prompts / remaining_prompts
         } catch (err) {
             setEditError(err.message || 'Failed to edit resume. Please try again.');
         } finally {
             setEditing(false);
         }
     };
-    
+
     const handleInlineEdit = async () => {
-        if (isGuest) {
-            setEditError('Please log in to edit your resume.');
-            return;
-        }
         if (!result.resume_id) {
-            setEditError('Resume must be saved to edit. Please log in and generate again.');
+            setEditError('Resume ID missing — please regenerate your resume.');
             return;
         }
-        
-        // Parse JSON and validate
+
         let parsedData;
         try {
             parsedData = JSON.parse(jsonText);
-        } catch (err) {
+        } catch {
             setEditError('Invalid JSON. Please check your syntax.');
             return;
         }
-        
+
         setEditing(true);
         setEditError('');
         try {
             const response = await resumeAPI.updateInline(result.resume_id, parsedData, userId);
             if (onUpdate) {
-                onUpdate({
-                    ...response,
-                    preview_html: response.preview_html,
-                    data: response.data,
-                });
+                onUpdate({ ...response, preview_html: response.preview_html, data: response.data });
             }
             setIsEditingInline(false);
         } catch (err) {
-            const errorMessage = err.response?.data?.detail || 
-                                err.message || 
-                                'Failed to update resume. Please try again.';
-            setEditError(errorMessage);
-            console.error('Inline edit error:', err);
+            setEditError(err.response?.data?.detail || err.message || 'Failed to update resume. Please try again.');
         } finally {
             setEditing(false);
+        }
+    };
+
+    const handleSwitchTemplate = async (templateId) => {
+        if (templateId === activeTemplate || switchingTemplate || !result.resume_id) return;
+        setSwitchingTemplate(true);
+        try {
+            const response = await resumeAPI.switchTemplate(
+                result.resume_id,
+                templateId,
+                isGuest ? null : userId,
+            );
+            setActiveTemplate(templateId);
+            if (onUpdate) onUpdate({ ...response, data: result.data });
+        } catch (err) {
+            setEditError(err.message || 'Failed to switch template.');
+        } finally {
+            setSwitchingTemplate(false);
         }
     };
 
@@ -138,21 +154,54 @@ function ResultView({ result, onReset, onUpdate }) {
                     <p>AI-generated and tailored to your job description. Download your .docx below.</p>
                 </div>
             </div>
-            
-            {promptInfo && (
-                <div className="gen-prompt-info">
-                    <span>Prompts used: {promptInfo.prompt_count} / {promptInfo.max_prompts}</span>
-                    {promptInfo.remaining_prompts === 0 && (
-                        <button className="btn-upgrade" onClick={() => window.location.href = '/pricing'}>
-                            Upgrade to Pro (10x prompts)
+
+            {/* ── Template switcher ── */}
+            {result.resume_id && (
+                <div className="gen-template-switcher">
+                    <span className="gen-template-switcher__label">Layout:</span>
+                    {TEMPLATES.map(t => (
+                        <button
+                            key={t.id}
+                            type="button"
+                            className={`gen-template-pill${activeTemplate === t.id ? ' gen-template-pill--active' : ''}`}
+                            onClick={() => handleSwitchTemplate(t.id)}
+                            disabled={switchingTemplate}
+                            style={{ '--pill-color': t.preview.headingColor }}
+                            aria-pressed={activeTemplate === t.id}
+                        >
+                            <span className="gen-template-pill__dot" style={{ background: t.preview.headingColor }} />
+                            {t.name}
+                            {switchingTemplate && activeTemplate !== t.id && ' '}
                         </button>
+                    ))}
+                    {switchingTemplate && (
+                        <span className="gen-template-switcher__loading">Applying…</span>
                     )}
                 </div>
             )}
-            
-            {isGuest && (
+
+            {/* Edit-quota banner */}
+            {promptInfo && (
+                <div className="gen-prompt-info">
+                    <span>Edits used: {promptInfo.prompt_count} / {promptInfo.max_prompts}</span>
+                    {editsExhausted && isGuest && (
+                        <a className="btn-upgrade" href="/signup">
+                            Sign up for 50 edits
+                        </a>
+                    )}
+                    {editsExhausted && !isGuest && (
+                        <a className="btn-upgrade" href="/pricing">
+                            Upgrade to Pro for more edits
+                        </a>
+                    )}
+                </div>
+            )}
+
+            {/* Guest first-use nudge (only before they've used any edits) */}
+            {isGuest && !promptInfo && (
                 <div className="gen-guest-notice">
-                    <strong>💡 Want to edit your resume?</strong> Please log in to use AI-powered editing and make inline changes.
+                    <strong>Free edits:</strong> You can edit this resume up to {GUEST_MAX_EDITS} times without an account.
+                    <a href="/signup" className="gen-guest-notice__link">Sign up</a> for {PAID_MAX_EDITS} edits.
                 </div>
             )}
 
@@ -167,12 +216,8 @@ function ResultView({ result, onReset, onUpdate }) {
                                 rows={20}
                             />
                             {jsonText && (() => {
-                                try {
-                                    JSON.parse(jsonText);
-                                    return null;
-                                } catch {
-                                    return <div className="gen-json-error">⚠️ Invalid JSON syntax</div>;
-                                }
+                                try { JSON.parse(jsonText); return null; }
+                                catch { return <div className="gen-json-error">⚠️ Invalid JSON syntax</div>; }
                             })()}
                             <div className="gen-edit-actions">
                                 <button className="btn-save" onClick={handleInlineEdit} disabled={editing}>
@@ -180,7 +225,7 @@ function ResultView({ result, onReset, onUpdate }) {
                                 </button>
                                 <button className="btn-cancel" onClick={() => {
                                     setIsEditingInline(false);
-                                    setJsonText(JSON.stringify(result.data || {}, null, 2)); // Reset to original
+                                    setJsonText(JSON.stringify(result.data || {}, null, 2));
                                 }}>
                                     Cancel
                                 </button>
@@ -196,37 +241,44 @@ function ResultView({ result, onReset, onUpdate }) {
                     )}
                 </div>
             )}
-            
-            {!isGuest && result.resume_id && (
+
+            {result.resume_id && (
                 <div className="gen-edit-section">
-                    <h3>Edit Your Resume</h3>
+                    <h3>
+                        Edit Your Resume
+                        {editsRemaining !== null && (
+                            <span className="gen-edit-section__quota">
+                                {editsRemaining} edit{editsRemaining !== 1 ? 's' : ''} remaining
+                            </span>
+                        )}
+                    </h3>
                     <div className="gen-edit-prompt">
                         <textarea
                             className="gen-edit-input"
-                            placeholder="Describe how you'd like to change your resume (e.g., 'Make the professional summary more concise', 'Add Python to technical skills', 'Update the job title for the first experience')"
+                            placeholder="Describe a change (e.g. 'Make the summary more concise', 'Add Python to skills')"
                             value={editPrompt}
                             onChange={(e) => setEditPrompt(e.target.value)}
-                            rows={3}
-                            disabled={editing || (promptInfo && promptInfo.remaining_prompts === 0)}
+                            rows={2}
+                            disabled={editing || editsExhausted}
                         />
-                        <button 
-                            className="btn-edit-prompt" 
+                        <button
+                            className="btn-edit-prompt"
                             onClick={handleEditWithPrompt}
-                            disabled={editing || !editPrompt.trim() || (promptInfo && promptInfo.remaining_prompts === 0)}
+                            disabled={editing || !editPrompt.trim() || editsExhausted}
                         >
                             {editing ? 'Editing...' : '✨ Apply Edit'}
                         </button>
                     </div>
-                    <button 
-                        className="btn-edit-inline" 
-                        onClick={() => setIsEditingInline(true)}
-                        disabled={editing}
-                    >
-                        📝 Edit Inline (JSON)
-                    </button>
-                    {editError && (
-                        <div className="gen-error" role="alert">{editError}</div>
+                    {!isGuest && (
+                        <button
+                            className="btn-edit-inline"
+                            onClick={() => setIsEditingInline(true)}
+                            disabled={editing}
+                        >
+                            📝 Edit Inline (JSON)
+                        </button>
                     )}
+                    {editError && <div className="gen-error" role="alert">{editError}</div>}
                 </div>
             )}
 
@@ -238,9 +290,125 @@ function ResultView({ result, onReset, onUpdate }) {
                     ↺ Generate Another
                 </button>
             </div>
-            {downloadError && (
-                <div className="gen-error" role="alert">{downloadError}</div>
-            )}
+            {downloadError && <div className="gen-error" role="alert">{downloadError}</div>}
+        </div>
+    );
+}
+
+// ── Template definitions (id + accent colours for the pill switcher) ─────────
+const TEMPLATES = [
+    {
+        id: 'modern',
+        name: 'Modern',
+        description: 'Clean navy-blue design — polished and professional.',
+        preview: { headingColor: '#1a375e', ruleColor: '#1a375e', font: 'sans-serif' },
+    },
+    {
+        id: 'classic',
+        name: 'Classic',
+        description: 'Traditional serif format — timeless and formal.',
+        preview: { headingColor: '#1a1a1a', ruleColor: '#333333', font: 'Georgia, serif' },
+    },
+    {
+        id: 'creative',
+        name: 'Creative',
+        description: 'Purple & teal accents — bold and contemporary.',
+        preview: { headingColor: '#6b21a8', ruleColor: '#0891b2', font: 'sans-serif' },
+    },
+    {
+        id: 'minimal',
+        name: 'Minimal',
+        description: 'Light-gray rules — understated and elegant.',
+        preview: { headingColor: '#374151', ruleColor: '#d1d5db', font: 'sans-serif' },
+    },
+    {
+        id: 'executive',
+        name: 'Executive',
+        description: 'Charcoal headings with amber-gold rules — sharp and authoritative.',
+        preview: { headingColor: '#1c1c2e', ruleColor: '#b45309', font: 'sans-serif' },
+    },
+];
+
+// ── Template carousel (shown before generation) ────────────────────────────
+// Scale factor: the dummy resume HTML uses width:21cm ≈ 794px.
+// We display it in a 180px-wide card → scale = 180/794 ≈ 0.2267.
+const CAROUSEL_SCALE = 0.2267;
+const CAROUSEL_IFRAME_W = 794;
+const CAROUSEL_IFRAME_H = 1060;  // show roughly the top 95% of an A4 page
+const CAROUSEL_CARD_W   = Math.round(CAROUSEL_IFRAME_W * CAROUSEL_SCALE); // ≈ 180
+const CAROUSEL_CARD_H   = Math.round(CAROUSEL_IFRAME_H * CAROUSEL_SCALE); // ≈ 240
+
+function TemplateCarousel({ selected, onChange }) {
+    const [previews, setPreviews] = useState({});
+
+    useEffect(() => {
+        templateAPI.getPreviews()
+            .then(data => setPreviews(data))
+            .catch(err => console.warn('Template previews unavailable:', err));
+    }, []);
+
+    return (
+        <div className="gen-panel gen-panel--carousel">
+            <h2 className="gen-panel__title">
+                <span className="gen-panel__icon">🎨</span>
+                Resume Template
+                <span className="gen-panel__hint">click to choose a layout</span>
+            </h2>
+            <div className="gen-carousel">
+                {TEMPLATES.map(t => (
+                    <button
+                        key={t.id}
+                        type="button"
+                        className={`gen-carousel-card${selected === t.id ? ' gen-carousel-card--active' : ''}`}
+                        onClick={() => onChange(t.id)}
+                        aria-pressed={selected === t.id}
+                        style={{ '--card-accent': t.preview.headingColor }}
+                    >
+                        {/* Scaled iframe showing a real dummy resume */}
+                        <div
+                            className="gen-carousel-iframe-outer"
+                            style={{ width: CAROUSEL_CARD_W, height: CAROUSEL_CARD_H }}
+                        >
+                            {previews[t.id] ? (
+                                <iframe
+                                    title={`${t.name} preview`}
+                                    srcDoc={previews[t.id]}
+                                    className="gen-carousel-iframe"
+                                    style={{
+                                        width: CAROUSEL_IFRAME_W,
+                                        height: CAROUSEL_IFRAME_H,
+                                        transform: `scale(${CAROUSEL_SCALE})`,
+                                    }}
+                                    sandbox="allow-same-origin"
+                                    scrolling="no"
+                                />
+                            ) : (
+                                /* Skeleton while loading */
+                                <div
+                                    className="gen-carousel-skeleton"
+                                    style={{ background: t.preview.headingColor + '14' }}
+                                >
+                                    <div className="gen-carousel-skeleton__name"
+                                        style={{ background: t.preview.headingColor + '50' }} />
+                                    <div className="gen-carousel-skeleton__rule"
+                                        style={{ background: t.preview.ruleColor }} />
+                                    {[1,2,3,4].map(i => (
+                                        <div key={i} className="gen-carousel-skeleton__line"
+                                            style={{ width: i % 2 === 0 ? '80%' : '95%' }} />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="gen-carousel-footer">
+                            <div className="gen-carousel-dot"
+                                style={{ background: t.preview.headingColor }} />
+                            <span className="gen-carousel-name">{t.name}</span>
+                            {selected === t.id && <span className="gen-carousel-check">✓</span>}
+                        </div>
+                    </button>
+                ))}
+            </div>
         </div>
     );
 }
@@ -252,6 +420,7 @@ const WizardPage = () => {
     const [files, setFiles]             = useState([]);
     const [jobDesc, setJobDesc]         = useState('');
     const [additionalInfo, setAdditionalInfo] = useState('');
+    const [template, setTemplate]       = useState('modern');
     const [isDragging, setIsDragging]   = useState(false);
     const [loading, setLoading]         = useState(false);
     const [error, setError]             = useState('');
@@ -295,8 +464,8 @@ const WizardPage = () => {
         setLoading(true);
         setError(''); // Clear previous errors
         try {
-            const data = await resumeAPI.generate(files, jobDesc, additionalInfo);
-            setResult(data);
+            const data = await resumeAPI.generate(files, jobDesc, additionalInfo, null, template);
+            setResult({ ...data, template });
         } catch (err) {
             // Use the enhanced error message from the API interceptor
             let msg = err.message || 'Generation failed. Please try again.';
@@ -467,6 +636,9 @@ const WizardPage = () => {
                     Tip: Include specific examples, achievements, or responses to selection criteria that directly relate to the job description.
                 </p>
             </div>
+
+            {/* Template Carousel */}
+            <TemplateCarousel selected={template} onChange={setTemplate} />
 
             {/* Error */}
             {error && (

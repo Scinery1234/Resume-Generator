@@ -245,6 +245,124 @@ class TestTemplates:
             assert "name" in tpl
             assert "description" in tpl
 
+    def test_templates_returns_five_entries(self):
+        resp = client.get("/api/templates")
+        assert len(resp.json()["templates"]) == 5
+
+    def test_template_ids_are_correct(self):
+        resp = client.get("/api/templates")
+        ids = {t["id"] for t in resp.json()["templates"]}
+        assert ids == {"modern", "classic", "creative", "minimal", "executive"}
+
+    def test_template_previews_returns_all_five(self):
+        resp = client.get("/api/templates/previews")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert set(data.keys()) == {"modern", "classic", "creative", "minimal", "executive"}
+
+    def test_template_previews_contain_valid_html(self):
+        resp = client.get("/api/templates/previews")
+        assert resp.status_code == 200
+        for tid, html_str in resp.json().items():
+            assert "<!DOCTYPE html>" in html_str, f"{tid} preview missing DOCTYPE"
+            assert "ALEX JOHNSON" in html_str, f"{tid} preview missing dummy candidate name"
+
+    def test_template_previews_executive_has_amber_rule(self):
+        resp = client.get("/api/templates/previews")
+        assert "#b45309" in resp.json()["executive"]
+
+    def test_template_previews_classic_uses_serif(self):
+        resp = client.get("/api/templates/previews")
+        assert "serif" in resp.json()["classic"].lower()
+
+
+class TestGenerateWithTemplate:
+    """Tests for the `template` parameter in POST /api/generate."""
+
+    @pytest.mark.parametrize("template_id", ["modern", "classic", "creative", "minimal"])
+    def test_generate_with_each_template(self, monkeypatch, template_id):
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.choices[0].message.content = json.dumps(MOCK_RESUME_JSON)
+        mock_client.chat.completions.create.return_value = mock_resp
+        monkeypatch.setattr("main.openai_client", mock_client)
+
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer", "template": template_id},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200, f"Failed for template '{template_id}': {resp.text}"
+        data = resp.json()
+        assert "preview_html" in data
+        assert data["filename"].endswith(".docx")
+
+    def test_generate_without_template_defaults_to_modern(self, monkeypatch):
+        """Omitting the template field must not cause an error (defaults to modern)."""
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.choices[0].message.content = json.dumps(MOCK_RESUME_JSON)
+        mock_client.chat.completions.create.return_value = mock_resp
+        monkeypatch.setattr("main.openai_client", mock_client)
+
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+
+    def test_generate_unknown_template_falls_back_gracefully(self, monkeypatch):
+        """An unknown template ID must not crash — it falls back to modern."""
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.choices[0].message.content = json.dumps(MOCK_RESUME_JSON)
+        mock_client.chat.completions.create.return_value = mock_resp
+        monkeypatch.setattr("main.openai_client", mock_client)
+
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer", "template": "nonexistent"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+
+    def test_creative_template_preview_contains_purple(self, monkeypatch):
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.choices[0].message.content = json.dumps(MOCK_RESUME_JSON)
+        mock_client.chat.completions.create.return_value = mock_resp
+        monkeypatch.setattr("main.openai_client", mock_client)
+
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer", "template": "creative"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+        # Creative template uses purple (#6b21a8) for headings
+        assert "#6b21a8" in resp.json()["preview_html"]
+
+    def test_classic_template_preview_contains_serif_font(self, monkeypatch):
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.choices[0].message.content = json.dumps(MOCK_RESUME_JSON)
+        mock_client.chat.completions.create.return_value = mock_resp
+        monkeypatch.setattr("main.openai_client", mock_client)
+
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer", "template": "classic"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+        assert "Georgia" in resp.json()["preview_html"]
+
 
 # ── Resumes list endpoint ────────────────────────────────────────────────────
 
@@ -449,3 +567,257 @@ class TestGenerateFromDocuments:
             files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
         )
         assert resp.status_code == 500
+
+    def test_generate_always_returns_resume_id(self, monkeypatch):
+        """Even for guests (no user_id), the generate endpoint must return a resume_id."""
+        _mock_openai_client(monkeypatch)
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["resume_id"] is not None
+        assert isinstance(data["resume_id"], int)
+
+
+# ── Guest editing ─────────────────────────────────────────────────────────────
+
+class TestGuestEditing:
+    """Guest users (no user_id) can edit up to MAX_PROMPTS_GUEST times."""
+
+    def _generate_guest_resume(self, monkeypatch):
+        _mock_openai_client(monkeypatch)
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+        return resp.json()["resume_id"]
+
+    def _mock_edit_openai(self, monkeypatch):
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.choices[0].message.content = json.dumps(MOCK_RESUME_JSON)
+        mock_client.chat.completions.create.return_value = mock_resp
+        monkeypatch.setattr("main.openai_client", mock_client)
+
+    def test_guest_can_edit_without_user_id(self, monkeypatch):
+        resume_id = self._generate_guest_resume(monkeypatch)
+        self._mock_edit_openai(monkeypatch)
+        resp = client.post(
+            f"/api/resumes/{resume_id}/edit",
+            data={"prompt": "Make the summary shorter"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "success"
+        assert "preview_html" in data
+        assert "remaining_prompts" in data
+
+    def test_guest_edit_decrements_remaining_prompts(self, monkeypatch):
+        resume_id = self._generate_guest_resume(monkeypatch)
+        self._mock_edit_openai(monkeypatch)
+        resp = client.post(
+            f"/api/resumes/{resume_id}/edit",
+            data={"prompt": "Add more skills"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        from utils import MAX_PROMPTS_GUEST
+        assert data["max_prompts"] == MAX_PROMPTS_GUEST
+        assert data["prompt_count"] == 1
+        assert data["remaining_prompts"] == MAX_PROMPTS_GUEST - 1
+
+    def test_guest_edit_limit_enforced(self, monkeypatch):
+        """After MAX_PROMPTS_GUEST edits the endpoint returns 403."""
+        from utils import MAX_PROMPTS_GUEST
+        resume_id = self._generate_guest_resume(monkeypatch)
+        self._mock_edit_openai(monkeypatch)
+        # Exhaust all allowed edits
+        for _ in range(MAX_PROMPTS_GUEST):
+            r = client.post(
+                f"/api/resumes/{resume_id}/edit",
+                data={"prompt": "tweak"},
+            )
+            assert r.status_code == 200
+        # Next edit must be rejected
+        resp = client.post(
+            f"/api/resumes/{resume_id}/edit",
+            data={"prompt": "one more tweak"},
+        )
+        assert resp.status_code == 403
+        assert "free edits" in resp.json()["detail"].lower()
+
+    def test_guest_edit_returns_download_url_filename(self, monkeypatch):
+        resume_id = self._generate_guest_resume(monkeypatch)
+        self._mock_edit_openai(monkeypatch)
+        resp = client.post(
+            f"/api/resumes/{resume_id}/edit",
+            data={"prompt": "Update the summary"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "filename" in data
+        assert data["filename"].endswith(".docx")
+
+    def test_guest_cannot_edit_logged_in_resume(self, monkeypatch):
+        """A guest should not be able to edit a resume that belongs to a user."""
+        # Create a logged-in user resume
+        _mock_openai_client(monkeypatch)
+        signup_resp = client.post("/api/auth/signup", json={
+            "name": "Guest Edit Guard",
+            "email": "guest_guard_xyz@example.com",
+            "password": "pass1234",
+        })
+        assert signup_resp.status_code in (200, 400)
+        login_resp = client.post("/api/auth/login", json={
+            "email": "guest_guard_xyz@example.com",
+            "password": "pass1234",
+        })
+        user_id = login_resp.json()["user_id"]
+
+        txt = b"Jane Smith\nSoftware Engineer"
+        gen_resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer", "user_id": user_id},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert gen_resp.status_code == 200
+        resume_id = gen_resp.json()["resume_id"]
+
+        self._mock_edit_openai(monkeypatch)
+        # Guest (no user_id) tries to edit a user-owned resume — must fail
+        resp = client.post(
+            f"/api/resumes/{resume_id}/edit",
+            data={"prompt": "Change summary"},
+        )
+        assert resp.status_code == 404  # not found (user_id IS NULL filter fails)
+
+    def test_edit_nonexistent_resume_returns_404(self, monkeypatch):
+        self._mock_edit_openai(monkeypatch)
+        resp = client.post(
+            "/api/resumes/999999/edit",
+            data={"prompt": "Update"},
+        )
+        assert resp.status_code == 404
+
+
+# ── Prompt-info endpoint ──────────────────────────────────────────────────────
+
+class TestPromptInfoEndpoint:
+    def test_prompt_info_for_free_user(self):
+        from utils import MAX_PROMPTS_FREE
+        client.post("/api/auth/signup", json={
+            "name": "Prompt Info User",
+            "email": "promptinfo_xyz@example.com",
+            "password": "pass1234",
+        })
+        login = client.post("/api/auth/login", json={
+            "email": "promptinfo_xyz@example.com",
+            "password": "pass1234",
+        })
+        user_id = login.json()["user_id"]
+        resp = client.get(f"/api/users/{user_id}/prompt-info")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["max_prompts"] == MAX_PROMPTS_FREE
+        assert data["remaining_prompts"] == MAX_PROMPTS_FREE
+        assert data["membership_tier"] == "free"
+
+
+# ── Template switcher ─────────────────────────────────────────────────────────
+
+class TestSwitchTemplate:
+    """POST /api/resumes/{id}/switch-template re-renders without consuming quota."""
+
+    def _guest_resume_id(self, monkeypatch):
+        _mock_openai_client(monkeypatch)
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+        return resp.json()["resume_id"]
+
+    def test_switch_template_returns_new_preview(self, monkeypatch):
+        resume_id = self._guest_resume_id(monkeypatch)
+        resp = client.post(
+            f"/api/resumes/{resume_id}/switch-template",
+            data={"template_id": "classic"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "success"
+        assert "preview_html" in data
+        assert data["template_id"] == "classic"
+
+    def test_switch_template_updates_filename(self, monkeypatch):
+        resume_id = self._guest_resume_id(monkeypatch)
+        resp = client.post(
+            f"/api/resumes/{resume_id}/switch-template",
+            data={"template_id": "creative"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["filename"].endswith(".docx")
+
+    def test_switch_template_all_four_templates(self, monkeypatch):
+        resume_id = self._guest_resume_id(monkeypatch)
+        for tid in ("modern", "classic", "creative", "minimal"):
+            resp = client.post(
+                f"/api/resumes/{resume_id}/switch-template",
+                data={"template_id": tid},
+            )
+            assert resp.status_code == 200, f"Failed for {tid}: {resp.text}"
+            assert resp.json()["template_id"] == tid
+
+    def test_switch_template_invalid_id_returns_400(self, monkeypatch):
+        resume_id = self._guest_resume_id(monkeypatch)
+        resp = client.post(
+            f"/api/resumes/{resume_id}/switch-template",
+            data={"template_id": "neon_unicorn"},
+        )
+        assert resp.status_code == 400
+        assert "Unknown template" in resp.json()["detail"]
+
+    def test_switch_template_nonexistent_resume_returns_404(self, monkeypatch):
+        resp = client.post(
+            "/api/resumes/999999/switch-template",
+            data={"template_id": "modern"},
+        )
+        assert resp.status_code == 404
+
+    def test_switch_template_classic_preview_contains_serif(self, monkeypatch):
+        resume_id = self._guest_resume_id(monkeypatch)
+        resp = client.post(
+            f"/api/resumes/{resume_id}/switch-template",
+            data={"template_id": "classic"},
+        )
+        assert resp.status_code == 200
+        assert "serif" in resp.json()["preview_html"].lower()
+
+    def test_switch_template_does_not_consume_edit_quota(self, monkeypatch):
+        """Switching templates must NOT increment guest_edit_count."""
+        resume_id = self._guest_resume_id(monkeypatch)
+        for tid in ("classic", "creative", "minimal", "modern", "classic"):
+            resp = client.post(
+                f"/api/resumes/{resume_id}/switch-template",
+                data={"template_id": tid},
+            )
+            assert resp.status_code == 200
+
+        # Guest edit quota should still be full (all 3 remaining)
+        from models import Resume
+        from database import SessionLocal
+        db = SessionLocal()
+        try:
+            resume = db.query(Resume).filter(Resume.id == resume_id).first()
+            assert (resume.guest_edit_count or 0) == 0
+        finally:
+            db.close()

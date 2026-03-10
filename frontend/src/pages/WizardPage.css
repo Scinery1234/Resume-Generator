@@ -336,6 +336,64 @@
     color: #166534;
 }
 
+/* ── Template switcher (result screen) ──────────────────────────────────── */
+.gen-template-switcher {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px 16px;
+}
+.gen-template-switcher__label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #64748b;
+    margin-right: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.gen-template-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #334155;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.gen-template-pill:hover:not(:disabled) {
+    border-color: var(--pill-color, #0369a1);
+    color: var(--pill-color, #0369a1);
+    background: #f0f9ff;
+}
+.gen-template-pill--active {
+    border-color: var(--pill-color, #0369a1);
+    background: #f0f9ff;
+    color: var(--pill-color, #0369a1);
+    font-weight: 600;
+}
+.gen-template-pill:disabled { opacity: 0.6; cursor: not-allowed; }
+.gen-template-pill__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.gen-template-switcher__loading {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin-left: 4px;
+    font-style: italic;
+}
+
 /* Preview iframe wrapper */
 .gen-preview-wrap {
     background: #e2e8f0;
@@ -573,4 +631,130 @@
     background: #fef2f2;
     border: 1px solid #fecaca;
     border-radius: 4px;
+}
+
+/* ── Template Carousel ────────────────────────────────────────────────────── */
+
+/* Panel override: carousel needs extra width for 5 cards */
+.gen-panel--carousel {
+    grid-column: 1 / -1;
+    max-width: 1060px;
+    margin: 32px auto 0;
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: none;
+    box-shadow: none;
+}
+.gen-panel--carousel .gen-panel__title {
+    padding: 0 0 12px;
+}
+
+/* Horizontal scrollable row */
+.gen-carousel {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding: 6px 2px 12px;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+.gen-carousel::-webkit-scrollbar { height: 5px; }
+.gen-carousel::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+/* Individual card */
+.gen-carousel-card {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    background: #fff;
+    border: 2.5px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 10px 10px 10px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.gen-carousel-card:hover {
+    border-color: var(--card-accent, #0369a1);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.10);
+    transform: translateY(-2px);
+}
+.gen-carousel-card--active {
+    border-color: var(--card-accent, #0369a1);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #0369a1) 18%, transparent);
+}
+
+/* Scaled-iframe wrapper — clips the iframe to the card dimensions */
+.gen-carousel-iframe-outer {
+    overflow: hidden;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    position: relative;
+}
+.gen-carousel-iframe {
+    border: none;
+    display: block;
+    transform-origin: top left;
+    pointer-events: none;
+}
+
+/* Skeleton placeholder while previews load */
+.gen-carousel-skeleton {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 12px;
+    gap: 6px;
+    border-radius: 6px;
+}
+.gen-carousel-skeleton__name {
+    height: 10px;
+    border-radius: 3px;
+    width: 60%;
+    margin: 0 auto 6px;
+}
+.gen-carousel-skeleton__rule {
+    height: 1.5px;
+    border-radius: 1px;
+    width: 100%;
+    margin-bottom: 4px;
+}
+.gen-carousel-skeleton__line {
+    height: 5px;
+    background: #e2e8f0;
+    border-radius: 2px;
+}
+
+/* Card footer: dot + name + checkmark */
+.gen-carousel-footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 0 2px;
+}
+.gen-carousel-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.gen-carousel-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #0f172a;
+    flex: 1;
+}
+.gen-carousel-check {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--card-accent, #0369a1);
 }

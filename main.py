@@ -15,12 +15,12 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from database import get_db, init_db
 from models import User, Resume
-from doc_builder import ResumeBuilder
+from doc_builder import ResumeBuilder, TEMPLATE_LIST, DUMMY_CANDIDATE
 from prompts import SYSTEM_PROMPT_DRAFT, SYSTEM_PROMPT_GENERATE, create_resume_prompt, build_generate_prompt
 from utils import (
     sanitize_filename, validate_file_extension, get_max_prompts_for_tier,
     handle_database_error, standardize_response, validate_user_id,
-    MAX_FILES, MAX_FILE_SIZE, ALLOWED_EXTENSIONS
+    MAX_FILES, MAX_FILE_SIZE, ALLOWED_EXTENSIONS, MAX_PROMPTS_GUEST
 )
 import uuid
 
@@ -327,6 +327,7 @@ async def generate_from_documents(
     files: List[UploadFile] = File(default=[]),
     job_description: str = Form(...),
     additional_info: str = Form(default=""),
+    template: str = Form(default="modern"),
     user_id: Optional[int] = Form(default=None),  # Optional user ID for logged-in users
     db: Session = Depends(get_db),
 ):
@@ -420,30 +421,30 @@ async def generate_from_documents(
     # Sanitize filename (though UUID should be safe, this is defensive)
     safe_filename = sanitize_filename(resume_filename)
     resume_path = RESUMES_DIR / safe_filename
-    resume_builder.build_word_document(str(resume_path), resume_data)
+    resume_builder.build_word_document(str(resume_path), resume_data, template_id=template)
 
     # Build the HTML preview
-    preview_html = resume_builder.build_html_preview(resume_data)
+    preview_html = resume_builder.build_html_preview(resume_data, template_id=template)
 
-    # Save resume to database if user is logged in
+    # Always save the resume to the database (user_id=None for guests) so that
+    # the resume_id can be used for AI-powered edits without requiring login.
     resume_id = None
-    if user_id:
-        try:
-            resume_record = Resume(
-                user_id=user_id,
-                name=resume_data.get("name", "Untitled Resume"),
-                file_path=str(resume_path),
-                contact_info=json.dumps(resume_data.get("contact", {})),
-                resume_data=json.dumps(resume_data),
-                preview_html=preview_html,
-            )
-            db.add(resume_record)
-            db.commit()
-            db.refresh(resume_record)
-            resume_id = resume_record.id
-        except Exception as e:
-            logger.error(f"Error saving resume to database: {e}")
-            db.rollback()
+    try:
+        resume_record = Resume(
+            user_id=user_id,  # NULL for guest resumes
+            name=resume_data.get("name", "Untitled Resume"),
+            file_path=str(resume_path),
+            contact_info=json.dumps(resume_data.get("contact", {})),
+            resume_data=json.dumps(resume_data),
+            preview_html=preview_html,
+        )
+        db.add(resume_record)
+        db.commit()
+        db.refresh(resume_record)
+        resume_id = resume_record.id
+    except Exception as e:
+        logger.error(f"Error saving resume to database: {e}")
+        db.rollback()
 
     logger.info("Resume generated: %s (name: %s)", safe_filename, resume_data.get("name", "unknown"))
     return standardize_response({
@@ -702,27 +703,41 @@ async def upload_resume(file: UploadFile = File(...)):
 async def edit_resume_with_prompt(
     resume_id: int,
     prompt: str = Form(...),
-    user_id: int = Form(...),
+    user_id: Optional[int] = Form(default=None),
     db: Session = Depends(get_db),
 ):
-    """Edit a resume using a text prompt. Checks prompt count limits."""
-    # Get user and check membership
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Check prompt limits
-    max_prompts = get_max_prompts_for_tier(user.membership_tier)
-    if user.prompt_count >= max_prompts:
-        raise HTTPException(
-            status_code=403,
-            detail=f"You've reached your prompt limit ({max_prompts}). Upgrade to Pro for 10x more prompts!"
-        )
-    
-    # Get resume
-    resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id == user_id).first()
-    if not resume:
-        raise HTTPException(status_code=404, detail="Resume not found")
+    """Edit a resume using a text prompt. Checks prompt count limits.
+
+    Guests (no user_id) may edit their resume up to MAX_PROMPTS_GUEST times.
+    Logged-in users are limited by their membership tier.
+    """
+    if user_id:
+        # ── Logged-in user ────────────────────────────────────────────────
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        max_prompts = get_max_prompts_for_tier(user.membership_tier)
+        if user.prompt_count >= max_prompts:
+            raise HTTPException(
+                status_code=403,
+                detail=f"You've reached your prompt limit ({max_prompts}). Upgrade to Pro for more edits!"
+            )
+
+        resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id == user_id).first()
+        if not resume:
+            raise HTTPException(status_code=404, detail="Resume not found")
+    else:
+        # ── Guest ─────────────────────────────────────────────────────────
+        resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id.is_(None)).first()
+        if not resume:
+            raise HTTPException(status_code=404, detail="Resume not found")
+
+        if (resume.guest_edit_count or 0) >= MAX_PROMPTS_GUEST:
+            raise HTTPException(
+                status_code=403,
+                detail=f"You've used all {MAX_PROMPTS_GUEST} free edits. Sign up for a paid plan to get 50 edits!"
+            )
     
     if not resume.resume_data:
         raise HTTPException(status_code=400, detail="Resume data not available for editing")
@@ -768,19 +783,29 @@ Return ONLY the updated JSON object — no other text."""
         resume.preview_html = preview_html
         resume.file_path = str(resume_path)
         resume.updated_at = datetime.utcnow()
-        
-        # Increment prompt count
-        user.prompt_count += 1
-        
+
+        # Increment the appropriate counter and build the remaining-edits info
+        if user_id:
+            user.prompt_count += 1
+            prompt_count = user.prompt_count
+            remaining = max(0, max_prompts - prompt_count)
+        else:
+            resume.guest_edit_count = (resume.guest_edit_count or 0) + 1
+            prompt_count = resume.guest_edit_count
+            max_prompts = MAX_PROMPTS_GUEST
+            remaining = max(0, MAX_PROMPTS_GUEST - prompt_count)
+
         db.commit()
         db.refresh(resume)
-        
+
         return {
             "status": "success",
             "preview_html": preview_html,
             "data": updated_data,
-            "prompt_count": user.prompt_count,
+            "prompt_count": prompt_count,
             "max_prompts": max_prompts,
+            "remaining_prompts": remaining,
+            "filename": Path(resume.file_path).name if resume.file_path else None,
         }
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="AI returned invalid format")
@@ -823,6 +848,54 @@ async def update_resume_inline(
     })
 
 
+@app.post("/api/resumes/{resume_id}/switch-template", tags=["Resume Editing"])
+async def switch_resume_template(
+    resume_id: int,
+    template_id: str = Form(...),
+    user_id: Optional[int] = Form(default=None),
+    db: Session = Depends(get_db),
+):
+    """Re-render a resume with a different template without consuming any edit quota.
+
+    Works for both guests (user_id omitted) and logged-in users.
+    No OpenAI call is made — only the visual layout changes.
+    """
+    if user_id:
+        resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id == user_id).first()
+    else:
+        resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id.is_(None)).first()
+
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    if not resume.resume_data:
+        raise HTTPException(status_code=400, detail="Resume data not available")
+
+    # Validate template_id
+    valid_template_ids = {t["id"] for t in TEMPLATE_LIST}
+    if template_id not in valid_template_ids:
+        raise HTTPException(status_code=400, detail=f"Unknown template '{template_id}'")
+
+    resume_data = json.loads(resume.resume_data)
+    resume_builder = ResumeBuilder()
+    resume_filename = f"resume_{uuid.uuid4().hex[:10]}.docx"
+    safe_filename = sanitize_filename(resume_filename)
+    resume_path = RESUMES_DIR / safe_filename
+    resume_builder.build_word_document(str(resume_path), resume_data, template_id=template_id)
+    preview_html = resume_builder.build_html_preview(resume_data, template_id=template_id)
+
+    resume.preview_html = preview_html
+    resume.file_path = str(resume_path)
+    resume.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        "status": "success",
+        "preview_html": preview_html,
+        "filename": safe_filename,
+        "template_id": template_id,
+    }
+
+
 @app.get("/api/users/{user_id}/prompt-info", tags=["User"])
 async def get_prompt_info(user_id: int, db: Session = Depends(get_db)):
     """Get user's prompt count and membership tier."""
@@ -830,7 +903,7 @@ async def get_prompt_info(user_id: int, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    max_prompts = 10 if user.membership_tier == 'free' else 100 if user.membership_tier == 'pro' else 1000
+    max_prompts = get_max_prompts_for_tier(user.membership_tier)
     
     return {
         "prompt_count": user.prompt_count,
@@ -845,13 +918,23 @@ async def get_templates():
     """Get available resume templates"""
     return {
         "status": "success",
-        "templates": [
-            {"id": 1, "name": "Modern", "description": "Clean and modern design"},
-            {"id": 2, "name": "Classic", "description": "Traditional professional format"},
-            {"id": 3, "name": "Creative", "description": "Creative and colorful design"},
-            {"id": 4, "name": "Minimal", "description": "Minimalist design"}
-        ]
+        "templates": TEMPLATE_LIST,
     }
+
+
+@app.get("/api/templates/previews", tags=["Templates"])
+async def get_template_previews():
+    """Return a pre-rendered dummy resume HTML string for each template.
+
+    Used by the frontend template carousel so users can see a realistic
+    full-resume preview before selecting a layout. No authentication required.
+    """
+    builder = ResumeBuilder()
+    return {
+        tmpl["id"]: builder.build_html_preview(DUMMY_CANDIDATE, tmpl["id"])
+        for tmpl in TEMPLATE_LIST
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
