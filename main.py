@@ -848,6 +848,54 @@ async def update_resume_inline(
     })
 
 
+@app.post("/api/resumes/{resume_id}/switch-template", tags=["Resume Editing"])
+async def switch_resume_template(
+    resume_id: int,
+    template_id: str = Form(...),
+    user_id: Optional[int] = Form(default=None),
+    db: Session = Depends(get_db),
+):
+    """Re-render a resume with a different template without consuming any edit quota.
+
+    Works for both guests (user_id omitted) and logged-in users.
+    No OpenAI call is made — only the visual layout changes.
+    """
+    if user_id:
+        resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id == user_id).first()
+    else:
+        resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id.is_(None)).first()
+
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    if not resume.resume_data:
+        raise HTTPException(status_code=400, detail="Resume data not available")
+
+    # Validate template_id
+    valid_template_ids = {t["id"] for t in TEMPLATE_LIST}
+    if template_id not in valid_template_ids:
+        raise HTTPException(status_code=400, detail=f"Unknown template '{template_id}'")
+
+    resume_data = json.loads(resume.resume_data)
+    resume_builder = ResumeBuilder()
+    resume_filename = f"resume_{uuid.uuid4().hex[:10]}.docx"
+    safe_filename = sanitize_filename(resume_filename)
+    resume_path = RESUMES_DIR / safe_filename
+    resume_builder.build_word_document(str(resume_path), resume_data, template_id=template_id)
+    preview_html = resume_builder.build_html_preview(resume_data, template_id=template_id)
+
+    resume.preview_html = preview_html
+    resume.file_path = str(resume_path)
+    resume.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        "status": "success",
+        "preview_html": preview_html,
+        "filename": safe_filename,
+        "template_id": template_id,
+    }
+
+
 @app.get("/api/users/{user_id}/prompt-info", tags=["User"])
 async def get_prompt_info(user_id: int, db: Session = Depends(get_db)):
     """Get user's prompt count and membership tier."""

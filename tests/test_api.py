@@ -707,3 +707,96 @@ class TestPromptInfoEndpoint:
         assert data["max_prompts"] == MAX_PROMPTS_FREE
         assert data["remaining_prompts"] == MAX_PROMPTS_FREE
         assert data["membership_tier"] == "free"
+
+
+# ── Template switcher ─────────────────────────────────────────────────────────
+
+class TestSwitchTemplate:
+    """POST /api/resumes/{id}/switch-template re-renders without consuming quota."""
+
+    def _guest_resume_id(self, monkeypatch):
+        _mock_openai_client(monkeypatch)
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+        return resp.json()["resume_id"]
+
+    def test_switch_template_returns_new_preview(self, monkeypatch):
+        resume_id = self._guest_resume_id(monkeypatch)
+        resp = client.post(
+            f"/api/resumes/{resume_id}/switch-template",
+            data={"template_id": "classic"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "success"
+        assert "preview_html" in data
+        assert data["template_id"] == "classic"
+
+    def test_switch_template_updates_filename(self, monkeypatch):
+        resume_id = self._guest_resume_id(monkeypatch)
+        resp = client.post(
+            f"/api/resumes/{resume_id}/switch-template",
+            data={"template_id": "creative"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["filename"].endswith(".docx")
+
+    def test_switch_template_all_four_templates(self, monkeypatch):
+        resume_id = self._guest_resume_id(monkeypatch)
+        for tid in ("modern", "classic", "creative", "minimal"):
+            resp = client.post(
+                f"/api/resumes/{resume_id}/switch-template",
+                data={"template_id": tid},
+            )
+            assert resp.status_code == 200, f"Failed for {tid}: {resp.text}"
+            assert resp.json()["template_id"] == tid
+
+    def test_switch_template_invalid_id_returns_400(self, monkeypatch):
+        resume_id = self._guest_resume_id(monkeypatch)
+        resp = client.post(
+            f"/api/resumes/{resume_id}/switch-template",
+            data={"template_id": "neon_unicorn"},
+        )
+        assert resp.status_code == 400
+        assert "Unknown template" in resp.json()["detail"]
+
+    def test_switch_template_nonexistent_resume_returns_404(self, monkeypatch):
+        resp = client.post(
+            "/api/resumes/999999/switch-template",
+            data={"template_id": "modern"},
+        )
+        assert resp.status_code == 404
+
+    def test_switch_template_classic_preview_contains_serif(self, monkeypatch):
+        resume_id = self._guest_resume_id(monkeypatch)
+        resp = client.post(
+            f"/api/resumes/{resume_id}/switch-template",
+            data={"template_id": "classic"},
+        )
+        assert resp.status_code == 200
+        assert "serif" in resp.json()["preview_html"].lower()
+
+    def test_switch_template_does_not_consume_edit_quota(self, monkeypatch):
+        """Switching templates must NOT increment guest_edit_count."""
+        resume_id = self._guest_resume_id(monkeypatch)
+        for tid in ("classic", "creative", "minimal", "modern", "classic"):
+            resp = client.post(
+                f"/api/resumes/{resume_id}/switch-template",
+                data={"template_id": tid},
+            )
+            assert resp.status_code == 200
+
+        # Guest edit quota should still be full (all 3 remaining)
+        from models import Resume
+        from database import SessionLocal
+        db = SessionLocal()
+        try:
+            resume = db.query(Resume).filter(Resume.id == resume_id).first()
+            assert (resume.guest_edit_count or 0) == 0
+        finally:
+            db.close()

@@ -33,6 +33,8 @@ function ResultView({ result, onReset, onUpdate }) {
     const [promptInfo, setPromptInfo] = useState(null);
     const [isEditingInline, setIsEditingInline] = useState(false);
     const [jsonText, setJsonText] = useState(() => JSON.stringify(result.data || {}, null, 2));
+    const [activeTemplate, setActiveTemplate] = useState(result.template || 'modern');
+    const [switchingTemplate, setSwitchingTemplate] = useState(false);
 
     const userId = localStorage.getItem('userId');
     const token  = localStorage.getItem('token');
@@ -125,6 +127,24 @@ function ResultView({ result, onReset, onUpdate }) {
         }
     };
 
+    const handleSwitchTemplate = async (templateId) => {
+        if (templateId === activeTemplate || switchingTemplate || !result.resume_id) return;
+        setSwitchingTemplate(true);
+        try {
+            const response = await resumeAPI.switchTemplate(
+                result.resume_id,
+                templateId,
+                isGuest ? null : userId,
+            );
+            setActiveTemplate(templateId);
+            if (onUpdate) onUpdate({ ...response, data: result.data });
+        } catch (err) {
+            setEditError(err.message || 'Failed to switch template.');
+        } finally {
+            setSwitchingTemplate(false);
+        }
+    };
+
     return (
         <div className="gen-result">
             <div className="gen-result__header">
@@ -134,6 +154,31 @@ function ResultView({ result, onReset, onUpdate }) {
                     <p>AI-generated and tailored to your job description. Download your .docx below.</p>
                 </div>
             </div>
+
+            {/* ── Template switcher ── */}
+            {result.resume_id && (
+                <div className="gen-template-switcher">
+                    <span className="gen-template-switcher__label">Layout:</span>
+                    {TEMPLATES.map(t => (
+                        <button
+                            key={t.id}
+                            type="button"
+                            className={`gen-template-pill${activeTemplate === t.id ? ' gen-template-pill--active' : ''}`}
+                            onClick={() => handleSwitchTemplate(t.id)}
+                            disabled={switchingTemplate}
+                            style={{ '--pill-color': t.preview.headingColor }}
+                            aria-pressed={activeTemplate === t.id}
+                        >
+                            <span className="gen-template-pill__dot" style={{ background: t.preview.headingColor }} />
+                            {t.name}
+                            {switchingTemplate && activeTemplate !== t.id && ' '}
+                        </button>
+                    ))}
+                    {switchingTemplate && (
+                        <span className="gen-template-switcher__loading">Applying…</span>
+                    )}
+                </div>
+            )}
 
             {/* Edit-quota banner */}
             {promptInfo && (
@@ -375,7 +420,7 @@ const WizardPage = () => {
         setError(''); // Clear previous errors
         try {
             const data = await resumeAPI.generate(files, jobDesc, additionalInfo, null, template);
-            setResult(data);
+            setResult({ ...data, template });
         } catch (err) {
             // Use the enhanced error message from the API interceptor
             let msg = err.message || 'Generation failed. Please try again.';

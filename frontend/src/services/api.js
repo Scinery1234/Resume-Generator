@@ -251,6 +251,22 @@ export const resumeAPI = {
     return response.data;
   },
   
+  switchTemplate: async (resumeId, templateId, userId = null) => {
+    const formData = new FormData();
+    formData.append('template_id', templateId);
+    if (userId) formData.append('user_id', userId);
+    const response = await fetch(`${API_BASE_URL}/api/resumes/${resumeId}/switch-template`, {
+      method: 'POST',
+      body: formData,
+      mode: 'cors',
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+      throw new Error(error.detail || `Server error: ${response.status}`);
+    }
+    return await response.json();
+  },
+
   getPromptInfo: async (userId) => {
     const response = await api.get(`/api/users/${userId}/prompt-info`);
     return response.data;
