@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './WizardPage.css';
-import { resumeAPI, templateAPI } from '../services/api';
+import { resumeAPI } from '../services/api';
 import { downloadBlob } from '../utils/fileDownload';
 
 const MAX_FILES = 5;
@@ -295,58 +295,171 @@ function ResultView({ result, onReset, onUpdate }) {
     );
 }
 
-// ── Template definitions (id + accent colours for the pill switcher) ─────────
+// ── Template definitions ──────────────────────────────────────────────────────
+// `preview` drives the TemplatePreviewMini component — every key maps to a real
+// CSS value that matches the backend template config exactly.
 const TEMPLATES = [
     {
         id: 'modern',
         name: 'Modern',
         description: 'Clean navy-blue design — polished and professional.',
-        preview: { headingColor: '#1a375e', ruleColor: '#1a375e', font: 'sans-serif' },
+        preview: {
+            headingColor: '#1a375e',
+            ruleColor:    '#1a375e',
+            mutedColor:   '#445566',
+            fontFamily:   "Calibri, 'Segoe UI', Arial, sans-serif",
+            nameAlign:    'center',
+            namePx:       14,
+        },
     },
     {
         id: 'classic',
         name: 'Classic',
         description: 'Traditional serif format — timeless and formal.',
-        preview: { headingColor: '#1a1a1a', ruleColor: '#333333', font: 'Georgia, serif' },
+        preview: {
+            headingColor: '#1a1a1a',
+            ruleColor:    '#333333',
+            mutedColor:   '#555555',
+            fontFamily:   "Georgia, 'Times New Roman', serif",
+            nameAlign:    'center',
+            namePx:       13,
+        },
     },
     {
         id: 'creative',
         name: 'Creative',
         description: 'Purple & teal accents — bold and contemporary.',
-        preview: { headingColor: '#6b21a8', ruleColor: '#0891b2', font: 'sans-serif' },
+        preview: {
+            headingColor: '#6b21a8',
+            ruleColor:    '#0891b2',
+            mutedColor:   '#4b5563',
+            fontFamily:   "Calibri, 'Segoe UI', Arial, sans-serif",
+            nameAlign:    'left',
+            namePx:       16,
+        },
     },
     {
         id: 'minimal',
         name: 'Minimal',
         description: 'Light-gray rules — understated and elegant.',
-        preview: { headingColor: '#374151', ruleColor: '#d1d5db', font: 'sans-serif' },
+        preview: {
+            headingColor: '#374151',
+            ruleColor:    '#d1d5db',
+            mutedColor:   '#6b7280',
+            fontFamily:   "Calibri, 'Segoe UI', Arial, sans-serif",
+            nameAlign:    'left',
+            namePx:       14,
+        },
     },
     {
         id: 'executive',
         name: 'Executive',
         description: 'Charcoal headings with amber-gold rules — sharp and authoritative.',
-        preview: { headingColor: '#1c1c2e', ruleColor: '#b45309', font: 'sans-serif' },
+        preview: {
+            headingColor: '#1c1c2e',
+            ruleColor:    '#b45309',
+            mutedColor:   '#525252',
+            fontFamily:   "Calibri, 'Segoe UI', Arial, sans-serif",
+            nameAlign:    'left',
+            namePx:       15,
+        },
     },
 ];
 
+// ── Mini resume preview ───────────────────────────────────────────────────────
+// Renders a miniature but fully styled resume at a size designed for the card.
+// Uses inline styles pulled directly from the template's preview config, so
+// heading colour, rule colour, font family, and name alignment are all accurate.
+function PreviewSection({ label, p, children }) {
+    return (
+        <div style={{ marginBottom: 7 }}>
+            <div style={{
+                fontFamily: p.fontFamily, fontSize: 7, fontWeight: 700,
+                color: p.headingColor, letterSpacing: '0.07em', marginBottom: 2,
+            }}>
+                {label}
+            </div>
+            <div style={{ borderTop: `1px solid ${p.ruleColor}`, marginBottom: 4 }} />
+            {children}
+        </div>
+    );
+}
+
+function TemplatePreviewMini({ t }) {
+    const p = t.preview;
+    const body = { fontFamily: p.fontFamily, fontSize: 8, color: '#2a2a2a', lineHeight: 1.35 };
+    const muted = { fontFamily: p.fontFamily, fontSize: 7, fontStyle: 'italic', color: p.mutedColor };
+    const bold  = { fontFamily: p.fontFamily, fontSize: 8.5, fontWeight: 700, color: p.headingColor };
+
+    return (
+        <div style={{ padding: '13px 13px 10px', background: '#fff', fontFamily: p.fontFamily }}>
+            {/* ── Name ── */}
+            <div style={{
+                fontSize: p.namePx, fontWeight: 700, color: p.headingColor,
+                textAlign: p.nameAlign, letterSpacing: '0.04em', marginBottom: 2,
+            }}>
+                ALEX JOHNSON
+            </div>
+
+            {/* ── Contact ── */}
+            <div style={{
+                fontSize: 7, color: p.mutedColor,
+                textAlign: p.nameAlign, marginBottom: 6,
+            }}>
+                0412 345 678 · alex@email.com · Sydney NSW
+            </div>
+
+            {/* ── Header rule ── */}
+            <div style={{ borderTop: `1.5px solid ${p.ruleColor}`, marginBottom: 7 }} />
+
+            {/* ── Professional Summary ── */}
+            <PreviewSection label="PROFESSIONAL SUMMARY" p={p}>
+                <div style={{ ...body, marginBottom: 0 }}>
+                    Results-driven engineer with 6+ years delivering scalable web applications
+                    and leading high-performing teams across the fintech sector.
+                </div>
+            </PreviewSection>
+
+            {/* ── Work Experience ── */}
+            <PreviewSection label="WORK EXPERIENCE" p={p}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
+                    <span style={bold}>Senior Software Engineer</span>
+                    <span style={{ fontFamily: p.fontFamily, fontSize: 6.5, color: p.mutedColor }}>2021 – Present</span>
+                </div>
+                <div style={{ ...muted, marginBottom: 4 }}>Atlassian  |  Sydney NSW</div>
+                <div style={{ ...body, paddingLeft: 8, marginBottom: 2 }}>• Led microservices platform for 2M+ daily users</div>
+                <div style={{ ...body, paddingLeft: 8, marginBottom: 4 }}>• Reduced API response time by 40%</div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
+                    <span style={{ ...bold, fontSize: 8 }}>Software Engineer</span>
+                    <span style={{ fontFamily: p.fontFamily, fontSize: 6.5, color: p.mutedColor }}>2018 – 2021</span>
+                </div>
+                <div style={{ ...muted, marginBottom: 4 }}>Canva  |  Sydney NSW</div>
+                <div style={{ ...body, paddingLeft: 8, marginBottom: 2 }}>• Built real-time collaboration features for 5M+ users</div>
+                <div style={{ ...body, paddingLeft: 8 }}>• Implemented test framework, cutting QA time by 35%</div>
+            </PreviewSection>
+
+            {/* ── Education ── */}
+            <PreviewSection label="EDUCATION" p={p}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
+                    <span style={{ ...bold, fontSize: 8 }}>Bachelor of Computer Science</span>
+                    <span style={{ fontFamily: p.fontFamily, fontSize: 6.5, color: p.mutedColor }}>2018</span>
+                </div>
+                <div style={{ ...muted }}>University of New South Wales</div>
+            </PreviewSection>
+
+            {/* ── Key Skills ── */}
+            <PreviewSection label="KEY SKILLS" p={p}>
+                <div style={{ ...body }}>
+                    Python · TypeScript · React · AWS · Docker · CI/CD · Agile
+                </div>
+            </PreviewSection>
+        </div>
+    );
+}
+
 // ── Template carousel (shown before generation) ────────────────────────────
-// Scale factor: the dummy resume HTML uses width:21cm ≈ 794px.
-// We display it in a 180px-wide card → scale = 180/794 ≈ 0.2267.
-const CAROUSEL_SCALE = 0.2267;
-const CAROUSEL_IFRAME_W = 794;
-const CAROUSEL_IFRAME_H = 1060;  // show roughly the top 95% of an A4 page
-const CAROUSEL_CARD_W   = Math.round(CAROUSEL_IFRAME_W * CAROUSEL_SCALE); // ≈ 180
-const CAROUSEL_CARD_H   = Math.round(CAROUSEL_IFRAME_H * CAROUSEL_SCALE); // ≈ 240
-
 function TemplateCarousel({ selected, onChange }) {
-    const [previews, setPreviews] = useState({});
-
-    useEffect(() => {
-        templateAPI.getPreviews()
-            .then(data => setPreviews(data))
-            .catch(err => console.warn('Template previews unavailable:', err));
-    }, []);
-
     return (
         <div className="gen-panel gen-panel--carousel">
             <h2 className="gen-panel__title">
@@ -364,45 +477,11 @@ function TemplateCarousel({ selected, onChange }) {
                         aria-pressed={selected === t.id}
                         style={{ '--card-accent': t.preview.headingColor }}
                     >
-                        {/* Scaled iframe showing a real dummy resume */}
-                        <div
-                            className="gen-carousel-iframe-outer"
-                            style={{ width: CAROUSEL_CARD_W, height: CAROUSEL_CARD_H }}
-                        >
-                            {previews[t.id] ? (
-                                <iframe
-                                    title={`${t.name} preview`}
-                                    srcDoc={previews[t.id]}
-                                    className="gen-carousel-iframe"
-                                    style={{
-                                        width: CAROUSEL_IFRAME_W,
-                                        height: CAROUSEL_IFRAME_H,
-                                        transform: `scale(${CAROUSEL_SCALE})`,
-                                    }}
-                                    sandbox="allow-same-origin"
-                                    scrolling="no"
-                                />
-                            ) : (
-                                /* Skeleton while loading */
-                                <div
-                                    className="gen-carousel-skeleton"
-                                    style={{ background: t.preview.headingColor + '14' }}
-                                >
-                                    <div className="gen-carousel-skeleton__name"
-                                        style={{ background: t.preview.headingColor + '50' }} />
-                                    <div className="gen-carousel-skeleton__rule"
-                                        style={{ background: t.preview.ruleColor }} />
-                                    {[1,2,3,4].map(i => (
-                                        <div key={i} className="gen-carousel-skeleton__line"
-                                            style={{ width: i % 2 === 0 ? '80%' : '95%' }} />
-                                    ))}
-                                </div>
-                            )}
+                        <div className="gen-carousel-preview">
+                            <TemplatePreviewMini t={t} />
                         </div>
-
                         <div className="gen-carousel-footer">
-                            <div className="gen-carousel-dot"
-                                style={{ background: t.preview.headingColor }} />
+                            <div className="gen-carousel-dot" style={{ background: t.preview.headingColor }} />
                             <span className="gen-carousel-name">{t.name}</span>
                             {selected === t.id && <span className="gen-carousel-check">✓</span>}
                         </div>

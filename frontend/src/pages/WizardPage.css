@@ -653,7 +653,7 @@
 /* Horizontal scrollable row */
 .gen-carousel {
     display: flex;
-    gap: 16px;
+    gap: 12px;
     overflow-x: auto;
     padding: 6px 2px 12px;
     scrollbar-width: thin;
@@ -674,7 +674,7 @@
     background: #fff;
     border: 2.5px solid #e2e8f0;
     border-radius: 12px;
-    padding: 10px 10px 10px;
+    padding: 8px 8px 10px;
     cursor: pointer;
     text-align: left;
     transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
@@ -690,47 +690,14 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #0369a1) 18%, transparent);
 }
 
-/* Scaled-iframe wrapper — clips the iframe to the card dimensions */
-.gen-carousel-iframe-outer {
+/* Mini resume preview — clipped scrollable area */
+.gen-carousel-preview {
     overflow: hidden;
     border-radius: 6px;
     border: 1px solid #e2e8f0;
     background: #fff;
-    position: relative;
-}
-.gen-carousel-iframe {
-    border: none;
-    display: block;
-    transform-origin: top left;
-    pointer-events: none;
-}
-
-/* Skeleton placeholder while previews load */
-.gen-carousel-skeleton {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    padding: 14px 12px;
-    gap: 6px;
-    border-radius: 6px;
-}
-.gen-carousel-skeleton__name {
-    height: 10px;
-    border-radius: 3px;
-    width: 60%;
-    margin: 0 auto 6px;
-}
-.gen-carousel-skeleton__rule {
-    height: 1.5px;
-    border-radius: 1px;
-    width: 100%;
-    margin-bottom: 4px;
-}
-.gen-carousel-skeleton__line {
-    height: 5px;
-    background: #e2e8f0;
-    border-radius: 2px;
+    width: 190px;
+    height: 290px;   /* tall enough to show name + 4 sections */
 }
 
 /* Card footer: dot + name + checkmark */
