@@ -245,6 +245,103 @@ class TestTemplates:
             assert "name" in tpl
             assert "description" in tpl
 
+    def test_templates_returns_four_entries(self):
+        resp = client.get("/api/templates")
+        assert len(resp.json()["templates"]) == 4
+
+    def test_template_ids_are_correct(self):
+        resp = client.get("/api/templates")
+        ids = {t["id"] for t in resp.json()["templates"]}
+        assert ids == {"modern", "classic", "creative", "minimal"}
+
+
+class TestGenerateWithTemplate:
+    """Tests for the `template` parameter in POST /api/generate."""
+
+    @pytest.mark.parametrize("template_id", ["modern", "classic", "creative", "minimal"])
+    def test_generate_with_each_template(self, monkeypatch, template_id):
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.choices[0].message.content = json.dumps(MOCK_RESUME_JSON)
+        mock_client.chat.completions.create.return_value = mock_resp
+        monkeypatch.setattr("main.openai_client", mock_client)
+
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer", "template": template_id},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200, f"Failed for template '{template_id}': {resp.text}"
+        data = resp.json()
+        assert "preview_html" in data
+        assert data["filename"].endswith(".docx")
+
+    def test_generate_without_template_defaults_to_modern(self, monkeypatch):
+        """Omitting the template field must not cause an error (defaults to modern)."""
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.choices[0].message.content = json.dumps(MOCK_RESUME_JSON)
+        mock_client.chat.completions.create.return_value = mock_resp
+        monkeypatch.setattr("main.openai_client", mock_client)
+
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+
+    def test_generate_unknown_template_falls_back_gracefully(self, monkeypatch):
+        """An unknown template ID must not crash — it falls back to modern."""
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.choices[0].message.content = json.dumps(MOCK_RESUME_JSON)
+        mock_client.chat.completions.create.return_value = mock_resp
+        monkeypatch.setattr("main.openai_client", mock_client)
+
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer", "template": "nonexistent"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+
+    def test_creative_template_preview_contains_purple(self, monkeypatch):
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.choices[0].message.content = json.dumps(MOCK_RESUME_JSON)
+        mock_client.chat.completions.create.return_value = mock_resp
+        monkeypatch.setattr("main.openai_client", mock_client)
+
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer", "template": "creative"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+        # Creative template uses purple (#6b21a8) for headings
+        assert "#6b21a8" in resp.json()["preview_html"]
+
+    def test_classic_template_preview_contains_serif_font(self, monkeypatch):
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.choices[0].message.content = json.dumps(MOCK_RESUME_JSON)
+        mock_client.chat.completions.create.return_value = mock_resp
+        monkeypatch.setattr("main.openai_client", mock_client)
+
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer", "template": "classic"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+        assert "Georgia" in resp.json()["preview_html"]
+
 
 # ── Resumes list endpoint ────────────────────────────────────────────────────
 

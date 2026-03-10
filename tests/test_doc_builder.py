@@ -8,7 +8,7 @@ import pytest
 from pathlib import Path
 from docx import Document
 
-from doc_builder import ResumeBuilder
+from doc_builder import ResumeBuilder, TEMPLATES, TEMPLATE_LIST, _get_template
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -308,3 +308,152 @@ class TestLegacyMethods:
         text = builder.build_resume_text()
         assert "Alice" in text
         assert "Dev" in text
+
+
+# ── Template tests ───────────────────────────────────────────────────────────
+
+TEMPLATE_IDS = ["modern", "classic", "creative", "minimal"]
+
+
+class TestTemplateConfig:
+    def test_all_four_templates_defined(self):
+        for tid in TEMPLATE_IDS:
+            assert tid in TEMPLATES
+
+    def test_each_template_has_required_keys(self):
+        required = {
+            "heading_color", "rule_color", "muted_color",
+            "body_font", "heading_font",
+            "name_size", "contact_size", "section_size", "body_size",
+            "name_align",
+            "html_heading", "html_rule", "html_muted",
+            "html_name_size", "html_body_size",
+            "html_section_size", "html_contact_size",
+        }
+        for tid in TEMPLATE_IDS:
+            missing = required - TEMPLATES[tid].keys()
+            assert not missing, f"Template '{tid}' missing keys: {missing}"
+
+    def test_get_template_returns_modern_by_default(self):
+        assert _get_template(None) is TEMPLATES["modern"]
+        assert _get_template("") is TEMPLATES["modern"]
+
+    def test_get_template_unknown_falls_back_to_modern(self):
+        assert _get_template("unknown-template") is TEMPLATES["modern"]
+
+    def test_get_template_case_insensitive(self):
+        assert _get_template("Modern") is TEMPLATES["modern"]
+        assert _get_template("CLASSIC") is TEMPLATES["classic"]
+
+    def test_template_list_has_four_entries(self):
+        assert len(TEMPLATE_LIST) == 4
+
+    def test_template_list_ids_match_templates(self):
+        list_ids = {t["id"] for t in TEMPLATE_LIST}
+        assert list_ids == set(TEMPLATE_IDS)
+
+    def test_template_list_entries_have_required_fields(self):
+        for entry in TEMPLATE_LIST:
+            assert "id" in entry
+            assert "name" in entry
+            assert "description" in entry
+
+    def test_templates_have_distinct_heading_colors(self):
+        colors = [TEMPLATES[tid]["html_heading"] for tid in TEMPLATE_IDS]
+        assert len(set(colors)) == 4, "All templates should have distinct heading colours"
+
+
+class TestBuildWordDocumentWithTemplates:
+    @pytest.mark.parametrize("template_id", TEMPLATE_IDS)
+    def test_all_templates_create_file(self, builder, tmp_path, template_id):
+        path = str(tmp_path / f"resume_{template_id}.docx")
+        builder.build_word_document(path, FULL_CANDIDATE, template_id=template_id)
+        assert Path(path).exists()
+        assert Path(path).stat().st_size > 0
+
+    @pytest.mark.parametrize("template_id", TEMPLATE_IDS)
+    def test_all_templates_contain_name(self, builder, tmp_path, template_id):
+        path = str(tmp_path / f"resume_{template_id}.docx")
+        builder.build_word_document(path, FULL_CANDIDATE, template_id=template_id)
+        doc = Document(path)
+        full_text = " ".join(p.text for p in doc.paragraphs)
+        assert "JANE SMITH" in full_text
+
+    @pytest.mark.parametrize("template_id", TEMPLATE_IDS)
+    def test_all_templates_contain_experience(self, builder, tmp_path, template_id):
+        path = str(tmp_path / f"resume_{template_id}.docx")
+        builder.build_word_document(path, FULL_CANDIDATE, template_id=template_id)
+        doc = Document(path)
+        full_text = " ".join(p.text for p in doc.paragraphs)
+        assert "Senior Software Engineer" in full_text
+
+    def test_unknown_template_falls_back_gracefully(self, builder, tmp_docx):
+        """Unknown template IDs should fall back to 'modern' without raising."""
+        builder.build_word_document(tmp_docx, MINIMAL_CANDIDATE, template_id="nonexistent")
+        assert Path(tmp_docx).exists()
+
+    def test_classic_uses_georgia_font(self, builder, tmp_path):
+        path = str(tmp_path / "classic.docx")
+        builder.build_word_document(path, FULL_CANDIDATE, template_id="classic")
+        doc = Document(path)
+        # Normal style should be Georgia for the classic template
+        assert doc.styles["Normal"].font.name == "Georgia"
+
+    def test_creative_name_is_left_aligned(self, builder, tmp_path):
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        path = str(tmp_path / "creative.docx")
+        builder.build_word_document(path, FULL_CANDIDATE, template_id="creative")
+        doc = Document(path)
+        # First paragraph is the name paragraph; creative aligns left
+        name_para = doc.paragraphs[0]
+        assert name_para.alignment in (WD_ALIGN_PARAGRAPH.LEFT, None)
+
+    def test_modern_name_is_centered(self, builder, tmp_path):
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        path = str(tmp_path / "modern.docx")
+        builder.build_word_document(path, FULL_CANDIDATE, template_id="modern")
+        doc = Document(path)
+        name_para = doc.paragraphs[0]
+        assert name_para.alignment == WD_ALIGN_PARAGRAPH.CENTER
+
+
+class TestBuildHtmlPreviewWithTemplates:
+    @pytest.mark.parametrize("template_id", TEMPLATE_IDS)
+    def test_all_templates_produce_valid_html(self, builder, template_id):
+        result = builder.build_html_preview(FULL_CANDIDATE, template_id=template_id)
+        assert "<!DOCTYPE html>" in result
+        assert "JANE SMITH" in result
+
+    @pytest.mark.parametrize("template_id", TEMPLATE_IDS)
+    def test_all_templates_contain_heading_color(self, builder, template_id):
+        result = builder.build_html_preview(FULL_CANDIDATE, template_id=template_id)
+        expected_color = TEMPLATES[template_id]["html_heading"]
+        assert expected_color in result
+
+    def test_modern_html_uses_sans_font(self, builder):
+        result = builder.build_html_preview(FULL_CANDIDATE, template_id="modern")
+        assert "Calibri" in result
+
+    def test_classic_html_uses_serif_font(self, builder):
+        result = builder.build_html_preview(FULL_CANDIDATE, template_id="classic")
+        assert "Georgia" in result
+
+    def test_creative_html_has_purple_heading(self, builder):
+        result = builder.build_html_preview(FULL_CANDIDATE, template_id="creative")
+        assert "#6b21a8" in result
+
+    def test_minimal_html_has_light_rule(self, builder):
+        result = builder.build_html_preview(FULL_CANDIDATE, template_id="minimal")
+        assert "#d1d5db" in result
+
+    def test_unknown_template_falls_back_gracefully(self, builder):
+        result = builder.build_html_preview(MINIMAL_CANDIDATE, template_id="unknown")
+        assert "<!DOCTYPE html>" in result
+
+    def test_creative_html_name_left_aligned(self, builder):
+        result = builder.build_html_preview(FULL_CANDIDATE, template_id="creative")
+        assert 'text-align: left' in result
+
+    def test_modern_html_name_center_aligned(self, builder):
+        result = builder.build_html_preview(FULL_CANDIDATE, template_id="modern")
+        assert 'text-align: center' in result
