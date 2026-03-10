@@ -100,6 +100,27 @@ TEMPLATES = {
         "html_contact_size": "9.5pt",
         "html_accent_bg": None,
     },
+    "executive": {
+        "heading_color": RGBColor(0x1c, 0x1c, 0x2e),   # near-black deep charcoal
+        "rule_color":    RGBColor(0xb4, 0x53, 0x09),   # warm amber-gold
+        "muted_color":   RGBColor(0x52, 0x52, 0x52),
+        "body_font":     "Calibri",
+        "heading_font":  "Calibri",
+        "name_size":     Pt(22),
+        "contact_size":  Pt(10),
+        "section_size":  Pt(9.5),
+        "body_size":     Pt(10.5),
+        "name_align":    WD_ALIGN_PARAGRAPH.LEFT,
+        "section_rule":  True,
+        "html_heading":  "#1c1c2e",
+        "html_rule":     "#b45309",
+        "html_muted":    "#525252",
+        "html_name_size": "22pt",
+        "html_body_size": "10.5pt",
+        "html_section_size": "9.5pt",
+        "html_contact_size": "9.5pt",
+        "html_accent_bg": None,
+    },
 }
 
 # Available template IDs and metadata (used by the API)
@@ -124,7 +145,69 @@ TEMPLATE_LIST = [
         "name": "Minimal",
         "description": "Light-gray rules — understated and elegant.",
     },
+    {
+        "id": "executive",
+        "name": "Executive",
+        "description": "Charcoal headings with amber-gold rules — sharp and authoritative.",
+    },
 ]
+
+# ── Dummy resume for template preview thumbnails ─────────────────────────────
+DUMMY_CANDIDATE = {
+    "name": "Alex Johnson",
+    "contact": {
+        "phone": "0412 345 678",
+        "email": "alex@email.com",
+        "location": "Sydney, NSW",
+        "linkedin": "linkedin.com/in/alexjohnson",
+    },
+    "professional_summary": (
+        "Results-driven software engineer with 6+ years delivering scalable "
+        "web applications. Proven track record leading cross-functional teams "
+        "and shipping high-impact features on time and within scope."
+    ),
+    "key_skills": ["Python", "TypeScript", "React", "AWS", "Docker", "Agile", "CI/CD"],
+    "experience": [
+        {
+            "title": "Senior Software Engineer",
+            "company": "Atlassian",
+            "location": "Sydney, NSW",
+            "dates": "Jan 2021 – Present",
+            "bullets": [
+                "Led architecture of microservices platform serving 2M+ daily active users",
+                "Reduced API response time by 40% through caching and query optimisation",
+                "Mentored 3 junior engineers, improving team velocity by 25%",
+            ],
+        },
+        {
+            "title": "Software Engineer",
+            "company": "Canva",
+            "location": "Sydney, NSW",
+            "dates": "Mar 2018 – Dec 2020",
+            "bullets": [
+                "Built real-time collaboration features used by 5M+ users monthly",
+                "Implemented automated testing framework, cutting QA time by 35%",
+            ],
+        },
+    ],
+    "education": [
+        {
+            "degree": "Bachelor of Computer Science",
+            "field": "Software Engineering",
+            "institution": "University of New South Wales",
+            "graduation_year": "2018",
+        }
+    ],
+    "certifications": [
+        "AWS Certified Solutions Architect",
+        "Google Cloud Professional Developer",
+    ],
+    "awards": [],
+    "technical_skills": [
+        "Python", "JavaScript", "TypeScript", "PostgreSQL",
+        "Redis", "Kubernetes", "Terraform",
+    ],
+}
 
 
 def _get_template(template_id: str) -> Dict:

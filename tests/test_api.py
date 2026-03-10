@@ -245,14 +245,35 @@ class TestTemplates:
             assert "name" in tpl
             assert "description" in tpl
 
-    def test_templates_returns_four_entries(self):
+    def test_templates_returns_five_entries(self):
         resp = client.get("/api/templates")
-        assert len(resp.json()["templates"]) == 4
+        assert len(resp.json()["templates"]) == 5
 
     def test_template_ids_are_correct(self):
         resp = client.get("/api/templates")
         ids = {t["id"] for t in resp.json()["templates"]}
-        assert ids == {"modern", "classic", "creative", "minimal"}
+        assert ids == {"modern", "classic", "creative", "minimal", "executive"}
+
+    def test_template_previews_returns_all_five(self):
+        resp = client.get("/api/templates/previews")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert set(data.keys()) == {"modern", "classic", "creative", "minimal", "executive"}
+
+    def test_template_previews_contain_valid_html(self):
+        resp = client.get("/api/templates/previews")
+        assert resp.status_code == 200
+        for tid, html_str in resp.json().items():
+            assert "<!DOCTYPE html>" in html_str, f"{tid} preview missing DOCTYPE"
+            assert "ALEX JOHNSON" in html_str, f"{tid} preview missing dummy candidate name"
+
+    def test_template_previews_executive_has_amber_rule(self):
+        resp = client.get("/api/templates/previews")
+        assert "#b45309" in resp.json()["executive"]
+
+    def test_template_previews_classic_uses_serif(self):
+        resp = client.get("/api/templates/previews")
+        assert "serif" in resp.json()["classic"].lower()
 
 
 class TestGenerateWithTemplate:

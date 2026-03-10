@@ -312,7 +312,7 @@ class TestLegacyMethods:
 
 # ── Template tests ───────────────────────────────────────────────────────────
 
-TEMPLATE_IDS = ["modern", "classic", "creative", "minimal"]
+TEMPLATE_IDS = ["modern", "classic", "creative", "minimal", "executive"]
 
 
 class TestTemplateConfig:
@@ -345,8 +345,8 @@ class TestTemplateConfig:
         assert _get_template("Modern") is TEMPLATES["modern"]
         assert _get_template("CLASSIC") is TEMPLATES["classic"]
 
-    def test_template_list_has_four_entries(self):
-        assert len(TEMPLATE_LIST) == 4
+    def test_template_list_has_five_entries(self):
+        assert len(TEMPLATE_LIST) == 5
 
     def test_template_list_ids_match_templates(self):
         list_ids = {t["id"] for t in TEMPLATE_LIST}
@@ -360,7 +360,7 @@ class TestTemplateConfig:
 
     def test_templates_have_distinct_heading_colors(self):
         colors = [TEMPLATES[tid]["html_heading"] for tid in TEMPLATE_IDS]
-        assert len(set(colors)) == 4, "All templates should have distinct heading colours"
+        assert len(set(colors)) == len(TEMPLATE_IDS), "All templates should have distinct heading colours"
 
 
 class TestBuildWordDocumentWithTemplates:

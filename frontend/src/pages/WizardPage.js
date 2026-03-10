@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './WizardPage.css';
-import { resumeAPI } from '../services/api';
+import { resumeAPI, templateAPI } from '../services/api';
 import { downloadBlob } from '../utils/fileDownload';
 
 const MAX_FILES = 5;
@@ -295,7 +295,7 @@ function ResultView({ result, onReset, onUpdate }) {
     );
 }
 
-// ── Template selector ────────────────────────────────────────────────────────
+// ── Template definitions (id + accent colours for the pill switcher) ─────────
 const TEMPLATES = [
     {
         id: 'modern',
@@ -321,46 +321,91 @@ const TEMPLATES = [
         description: 'Light-gray rules — understated and elegant.',
         preview: { headingColor: '#374151', ruleColor: '#d1d5db', font: 'sans-serif' },
     },
+    {
+        id: 'executive',
+        name: 'Executive',
+        description: 'Charcoal headings with amber-gold rules — sharp and authoritative.',
+        preview: { headingColor: '#1c1c2e', ruleColor: '#b45309', font: 'sans-serif' },
+    },
 ];
 
-function TemplateSelector({ selected, onChange }) {
+// ── Template carousel (shown before generation) ────────────────────────────
+// Scale factor: the dummy resume HTML uses width:21cm ≈ 794px.
+// We display it in a 180px-wide card → scale = 180/794 ≈ 0.2267.
+const CAROUSEL_SCALE = 0.2267;
+const CAROUSEL_IFRAME_W = 794;
+const CAROUSEL_IFRAME_H = 1060;  // show roughly the top 95% of an A4 page
+const CAROUSEL_CARD_W   = Math.round(CAROUSEL_IFRAME_W * CAROUSEL_SCALE); // ≈ 180
+const CAROUSEL_CARD_H   = Math.round(CAROUSEL_IFRAME_H * CAROUSEL_SCALE); // ≈ 240
+
+function TemplateCarousel({ selected, onChange }) {
+    const [previews, setPreviews] = useState({});
+
+    useEffect(() => {
+        templateAPI.getPreviews()
+            .then(data => setPreviews(data))
+            .catch(err => console.warn('Template previews unavailable:', err));
+    }, []);
+
     return (
-        <div className="gen-panel gen-panel--full">
+        <div className="gen-panel gen-panel--carousel">
             <h2 className="gen-panel__title">
                 <span className="gen-panel__icon">🎨</span>
                 Resume Template
-                <span className="gen-panel__hint">choose a style</span>
+                <span className="gen-panel__hint">click to choose a layout</span>
             </h2>
-            <div className="gen-templates">
+            <div className="gen-carousel">
                 {TEMPLATES.map(t => (
                     <button
                         key={t.id}
                         type="button"
-                        className={`gen-template-card${selected === t.id ? ' gen-template-card--active' : ''}`}
+                        className={`gen-carousel-card${selected === t.id ? ' gen-carousel-card--active' : ''}`}
                         onClick={() => onChange(t.id)}
                         aria-pressed={selected === t.id}
+                        style={{ '--card-accent': t.preview.headingColor }}
                     >
-                        {/* Mini preview */}
+                        {/* Scaled iframe showing a real dummy resume */}
                         <div
-                            className="gen-template-thumb"
-                            style={{ fontFamily: t.preview.font }}
+                            className="gen-carousel-iframe-outer"
+                            style={{ width: CAROUSEL_CARD_W, height: CAROUSEL_CARD_H }}
                         >
-                            <div className="gen-template-thumb__name" style={{ color: t.preview.headingColor }}>
-                                JANE SMITH
-                            </div>
-                            <div className="gen-template-thumb__rule" style={{ borderColor: t.preview.ruleColor }} />
-                            <div className="gen-template-thumb__section" style={{ color: t.preview.headingColor }}>
-                                EXPERIENCE
-                            </div>
-                            <div className="gen-template-thumb__rule gen-template-thumb__rule--section" style={{ borderColor: t.preview.ruleColor }} />
-                            <div className="gen-template-thumb__text" />
-                            <div className="gen-template-thumb__text gen-template-thumb__text--short" />
+                            {previews[t.id] ? (
+                                <iframe
+                                    title={`${t.name} preview`}
+                                    srcDoc={previews[t.id]}
+                                    className="gen-carousel-iframe"
+                                    style={{
+                                        width: CAROUSEL_IFRAME_W,
+                                        height: CAROUSEL_IFRAME_H,
+                                        transform: `scale(${CAROUSEL_SCALE})`,
+                                    }}
+                                    sandbox="allow-same-origin"
+                                    scrolling="no"
+                                />
+                            ) : (
+                                /* Skeleton while loading */
+                                <div
+                                    className="gen-carousel-skeleton"
+                                    style={{ background: t.preview.headingColor + '14' }}
+                                >
+                                    <div className="gen-carousel-skeleton__name"
+                                        style={{ background: t.preview.headingColor + '50' }} />
+                                    <div className="gen-carousel-skeleton__rule"
+                                        style={{ background: t.preview.ruleColor }} />
+                                    {[1,2,3,4].map(i => (
+                                        <div key={i} className="gen-carousel-skeleton__line"
+                                            style={{ width: i % 2 === 0 ? '80%' : '95%' }} />
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                        <div className="gen-template-info">
-                            <span className="gen-template-name">{t.name}</span>
-                            <span className="gen-template-desc">{t.description}</span>
+
+                        <div className="gen-carousel-footer">
+                            <div className="gen-carousel-dot"
+                                style={{ background: t.preview.headingColor }} />
+                            <span className="gen-carousel-name">{t.name}</span>
+                            {selected === t.id && <span className="gen-carousel-check">✓</span>}
                         </div>
-                        {selected === t.id && <span className="gen-template-check">✓</span>}
                     </button>
                 ))}
             </div>
@@ -592,8 +637,8 @@ const WizardPage = () => {
                 </p>
             </div>
 
-            {/* Template Selector */}
-            <TemplateSelector selected={template} onChange={setTemplate} />
+            {/* Template Carousel */}
+            <TemplateCarousel selected={template} onChange={setTemplate} />
 
             {/* Error */}
             {error && (

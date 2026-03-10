@@ -15,7 +15,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from database import get_db, init_db
 from models import User, Resume
-from doc_builder import ResumeBuilder, TEMPLATE_LIST
+from doc_builder import ResumeBuilder, TEMPLATE_LIST, DUMMY_CANDIDATE
 from prompts import SYSTEM_PROMPT_DRAFT, SYSTEM_PROMPT_GENERATE, create_resume_prompt, build_generate_prompt
 from utils import (
     sanitize_filename, validate_file_extension, get_max_prompts_for_tier,
@@ -920,6 +920,21 @@ async def get_templates():
         "status": "success",
         "templates": TEMPLATE_LIST,
     }
+
+
+@app.get("/api/templates/previews", tags=["Templates"])
+async def get_template_previews():
+    """Return a pre-rendered dummy resume HTML string for each template.
+
+    Used by the frontend template carousel so users can see a realistic
+    full-resume preview before selecting a layout. No authentication required.
+    """
+    builder = ResumeBuilder()
+    return {
+        tmpl["id"]: builder.build_html_preview(DUMMY_CANDIDATE, tmpl["id"])
+        for tmpl in TEMPLATE_LIST
+    }
+
 
 if __name__ == "__main__":
     import uvicorn

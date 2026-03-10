@@ -278,6 +278,11 @@ export const templateAPI = {
     const response = await api.get('/api/templates');
     return response.data;
   },
+
+  getPreviews: async () => {
+    const response = await api.get('/api/templates/previews');
+    return response.data;  // { modern: '<html>…', classic: '<html>…', … }
+  },
 };
 
 // Health check utility with detailed logging

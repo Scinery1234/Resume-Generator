@@ -633,109 +633,128 @@
     border-radius: 4px;
 }
 
-/* ── Template Selector ────────────────────────────────────────────────────── */
-.gen-templates {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 14px;
-    margin-top: 8px;
+/* ── Template Carousel ────────────────────────────────────────────────────── */
+
+/* Panel override: carousel needs extra width for 5 cards */
+.gen-panel--carousel {
+    grid-column: 1 / -1;
+    max-width: 1060px;
+    margin: 32px auto 0;
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: none;
+    box-shadow: none;
+}
+.gen-panel--carousel .gen-panel__title {
+    padding: 0 0 12px;
 }
 
-.gen-template-card {
-    position: relative;
+/* Horizontal scrollable row */
+.gen-carousel {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding: 6px 2px 12px;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+.gen-carousel::-webkit-scrollbar { height: 5px; }
+.gen-carousel::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+/* Individual card */
+.gen-carousel-card {
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
     align-items: stretch;
     background: #fff;
-    border: 2px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 14px 14px 12px;
+    border: 2.5px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 10px 10px 10px;
     cursor: pointer;
     text-align: left;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.gen-carousel-card:hover {
+    border-color: var(--card-accent, #0369a1);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.10);
+    transform: translateY(-2px);
+}
+.gen-carousel-card--active {
+    border-color: var(--card-accent, #0369a1);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--card-accent, #0369a1) 18%, transparent);
 }
 
-.gen-template-card:hover {
-    border-color: #93c5fd;
-    box-shadow: 0 2px 8px rgba(3, 105, 161, 0.1);
-}
-
-.gen-template-card--active {
-    border-color: #0369a1;
-    box-shadow: 0 0 0 3px rgba(3, 105, 161, 0.12);
-}
-
-/* Mini document thumbnail */
-.gen-template-thumb {
-    background: #f8fafc;
+/* Scaled-iframe wrapper — clips the iframe to the card dimensions */
+.gen-carousel-iframe-outer {
+    overflow: hidden;
+    border-radius: 6px;
     border: 1px solid #e2e8f0;
-    border-radius: 5px;
-    padding: 8px 10px;
-    margin-bottom: 10px;
-    min-height: 90px;
+    background: #fff;
+    position: relative;
+}
+.gen-carousel-iframe {
+    border: none;
+    display: block;
+    transform-origin: top left;
+    pointer-events: none;
 }
 
-.gen-template-thumb__name {
-    font-size: 7.5pt;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-align: center;
-    margin-bottom: 3px;
-}
-
-.gen-template-thumb__rule {
-    border-top: 1.5px solid;
-    margin-bottom: 5px;
-}
-
-.gen-template-thumb__section {
-    font-size: 6pt;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    margin-bottom: 2px;
-}
-
-.gen-template-thumb__rule--section {
-    border-top-width: 1px;
-    margin-bottom: 4px;
-}
-
-.gen-template-thumb__text {
-    background: #cbd5e1;
-    height: 4px;
-    border-radius: 2px;
-    margin-bottom: 3px;
-}
-
-.gen-template-thumb__text--short {
-    width: 65%;
-}
-
-/* Card label */
-.gen-template-info {
+/* Skeleton placeholder while previews load */
+.gen-carousel-skeleton {
+    width: 100%;
+    height: 100%;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    padding: 14px 12px;
+    gap: 6px;
+    border-radius: 6px;
+}
+.gen-carousel-skeleton__name {
+    height: 10px;
+    border-radius: 3px;
+    width: 60%;
+    margin: 0 auto 6px;
+}
+.gen-carousel-skeleton__rule {
+    height: 1.5px;
+    border-radius: 1px;
+    width: 100%;
+    margin-bottom: 4px;
+}
+.gen-carousel-skeleton__line {
+    height: 5px;
+    background: #e2e8f0;
+    border-radius: 2px;
 }
 
-.gen-template-name {
-    font-size: 0.88rem;
+/* Card footer: dot + name + checkmark */
+.gen-carousel-footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 0 2px;
+}
+.gen-carousel-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.gen-carousel-name {
+    font-size: 0.85rem;
     font-weight: 700;
     color: #0f172a;
+    flex: 1;
 }
-
-.gen-template-desc {
-    font-size: 0.76rem;
-    color: #64748b;
-    line-height: 1.35;
-}
-
-/* Active checkmark */
-.gen-template-check {
-    position: absolute;
-    top: 8px;
-    right: 10px;
-    font-size: 0.85rem;
-    color: #0369a1;
+.gen-carousel-check {
+    font-size: 0.8rem;
     font-weight: 700;
+    color: var(--card-accent, #0369a1);
 }
