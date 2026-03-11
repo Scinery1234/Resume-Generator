@@ -470,7 +470,7 @@ function PreviewMiniA({ p }) {
     );
 }
 
-/** Layout B mini preview – two-column sidebar */
+/** Layout B mini preview – two-column sidebar with full-width header */
 function PreviewMiniB({ p }) {
     const sbItem = { fontSize: 6.5, color: p.sidebarText, marginBottom: 2, lineHeight: 1.3, wordBreak: 'break-all' };
     const body   = { fontFamily: p.fontFamily, fontSize: 7.5, color: '#2a2a2a', lineHeight: 1.35 };
@@ -478,15 +478,23 @@ function PreviewMiniB({ p }) {
     const bold   = { fontFamily: p.fontFamily, fontSize: 8, fontWeight: 700, color: p.headingColor };
 
     return (
-        <div style={{ display: 'flex', background: '#fff', fontFamily: p.fontFamily, minHeight: '100%' }}>
-            {/* ── Sidebar ── */}
-            <div style={{ width: '33%', background: p.sidebarBg, padding: '12px 7px 12px 9px', flexShrink: 0, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', background: '#fff', fontFamily: p.fontFamily, minHeight: '100%' }}>
+            {/* ── Full-width name header ── */}
+            <div style={{ background: p.sidebarBg, padding: '8px 10px 7px 9px', flexShrink: 0 }}>
                 <div style={{ fontSize: p.namePx, fontWeight: 700, color: p.sidebarText,
-                    letterSpacing: '0.02em', marginBottom: 10, lineHeight: 1.25,
-                    overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+                    letterSpacing: '0.03em', lineHeight: 1.1 }}>
                     ALEX JOHNSON
                 </div>
+                <div style={{ fontSize: 6.5, color: p.sidebarText, opacity: 0.82,
+                    marginTop: 3, letterSpacing: '0.04em' }}>
+                    Senior Software Engineer  ·  Atlassian  ·  Sydney NSW
+                </div>
+            </div>
 
+            {/* ── Body row ── */}
+            <div style={{ display: 'flex', flex: 1 }}>
+            {/* ── Sidebar ── */}
+            <div style={{ width: '33%', background: p.sidebarBg, padding: '7px 7px 12px 9px', flexShrink: 0, overflow: 'hidden' }}>
                 <SidebarSection label="CONTACT" p={p}>
                     <div style={sbItem}>0412 345 678</div>
                     <div style={sbItem}>alex@email.com</div>
@@ -506,12 +514,7 @@ function PreviewMiniB({ p }) {
             </div>
 
             {/* ── Main ── */}
-            <div style={{ flex: 1, padding: '12px 9px 8px 8px', minWidth: 0 }}>
-                {/* Role title — pushes Professional Summary below the sidebar name */}
-                <div style={{ fontSize: 7.5, fontWeight: 600, color: p.headingColor, letterSpacing: '0.02em',
-                    marginBottom: 6, paddingBottom: 4, borderBottom: `1px solid ${p.ruleColor}` }}>
-                    Senior Software Engineer  |  Atlassian
-                </div>
+            <div style={{ flex: 1, padding: '7px 9px 8px 8px', minWidth: 0 }}>
                 <div style={{ marginBottom: 6 }}>
                     <div style={{ fontSize: 6.5, fontWeight: 700, color: p.headingColor, letterSpacing: '0.07em', marginBottom: 2 }}>
                         PROFESSIONAL SUMMARY
@@ -540,6 +543,7 @@ function PreviewMiniB({ p }) {
                     <div style={{ ...body, paddingLeft: 7 }}>• Built real-time collaboration for 5M+ users</div>
                 </div>
             </div>
+            </div>{/* end body-row */}
         </div>
     );
 }

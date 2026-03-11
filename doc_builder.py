@@ -673,6 +673,55 @@ def _build_word_layout_b(doc: Document, candidate_data: Dict, tmpl: Dict):
         sec.left_margin   = Cm(0)
         sec.right_margin  = Cm(0)
 
+    # ── Full-width header table (name + role) ─────────────────────────────────
+    hdr_table = doc.add_table(rows=1, cols=1)
+    _clear_table_borders(hdr_table)
+    _set_table_width(hdr_table, 21.0)
+    hdr_cell = hdr_table.cell(0, 0)
+    _set_cell_width(hdr_cell, 21.0)
+    _add_cell_shading(hdr_cell, tmpl["docx_sidebar_bg_hex"])
+
+    # Name paragraph in header
+    hnp = hdr_cell.paragraphs[0]
+    _set_para_spacing(hnp, before=28, after=4)
+    _set_para_indent(hnp, _SB_PAD_L, _MN_PAD_R)
+    hnr = hnp.add_run(candidate_data.get('name', '').strip().upper())
+    hnr.font.name      = tmpl["heading_font"]
+    hnr.font.size      = Pt(20)
+    hnr.font.bold      = True
+    hnr.font.color.rgb = tmpl["docx_sidebar_text_rgb"]
+
+    # Role subtitle in header
+    contact: Dict = candidate_data.get('contact', {})
+    experience_peek = candidate_data.get('experience', [])
+    role_sub_parts = []
+    if experience_peek:
+        first = experience_peek[0]
+        if first.get('title'):   role_sub_parts.append(first['title'])
+        if first.get('company'): role_sub_parts.append(first['company'])
+    if contact.get('location'):  role_sub_parts.append(contact['location'])
+    if role_sub_parts:
+        hrp = hdr_cell.add_paragraph()
+        _set_para_spacing(hrp, before=0, after=28)
+        _set_para_indent(hrp, _SB_PAD_L, _MN_PAD_R)
+        hrr = hrp.add_run('  ·  '.join(role_sub_parts))
+        hrr.font.name      = tmpl["heading_font"]
+        hrr.font.size      = Pt(9.5)
+        hrr.font.italic    = True
+        hrr.font.color.rgb = tmpl["docx_sidebar_text_rgb"]
+    else:
+        _set_para_spacing(hnp, before=28, after=28)
+
+    # Suppress paragraph gap between the two tables
+    sep = doc.add_paragraph()
+    _set_para_spacing(sep, before=0, after=0)
+    sep.runs  # ensure no content
+    sep_fmt = sep._p.get_or_add_pPr()
+    sz_el = OxmlElement('w:sz')
+    sz_el.set(qn('w:val'), '2')   # 1pt — effectively invisible
+    sep_fmt.append(sz_el)
+
+    # ── Body table (sidebar + main) ────────────────────────────────────────────
     table = doc.add_table(rows=1, cols=2)
     _clear_table_borders(table)
     _set_table_width(table, 21.0)
@@ -685,21 +734,10 @@ def _build_word_layout_b(doc: Document, candidate_data: Dict, tmpl: Dict):
     _add_cell_shading(sb, tmpl["docx_sidebar_bg_hex"])
 
     # ── Sidebar ───────────────────────────────────────────────────────────────
-    contact: Dict = candidate_data.get('contact', {})
 
     # Top spacer (reuse the default empty paragraph)
     sp0 = sb.paragraphs[0]
-    _set_para_spacing(sp0, before=30, after=0)
-
-    # Name
-    np_ = sb.add_paragraph()
-    _set_para_spacing(np_, before=0, after=10)
-    _set_para_indent(np_, _SB_PAD_L, _SB_PAD_R)
-    nr = np_.add_run(candidate_data.get('name', '').strip().upper())
-    nr.font.name      = tmpl["heading_font"]
-    nr.font.size      = Pt(16)
-    nr.font.bold      = True
-    nr.font.color.rgb = tmpl["docx_sidebar_text_rgb"]
+    _set_para_spacing(sp0, before=14, after=0)
 
     # CONTACT
     _sb_heading(sb, 'Contact', tmpl)
@@ -740,9 +778,9 @@ def _build_word_layout_b(doc: Document, candidate_data: Dict, tmpl: Dict):
     _sb_text(sb, '', tmpl, before=0, after=20)
 
     # ── Main column ───────────────────────────────────────────────────────────
-    # Top spacer (reuse the default empty paragraph)
+    # Top spacer
     sp1 = mn.paragraphs[0]
-    _set_para_spacing(sp1, before=30, after=0)
+    _set_para_spacing(sp1, before=14, after=0)
 
     # PROFESSIONAL SUMMARY
     summary = candidate_data.get('professional_summary', '').strip()
@@ -1205,7 +1243,7 @@ def _build_html_layout_b(candidate_data: Dict, tmpl: Dict) -> str:
         c_html = ''.join(f'<div class="sb-item">  {e(str(c))}</div>' for c in certs)
         sb_parts.append(sb_section('Certifications', c_html))
 
-    sidebar_html = f'<div class="sidebar-name">{e(candidate_data.get("name","").strip().upper())}</div>' + ''.join(sb_parts)
+    sidebar_html = ''.join(sb_parts)
 
     # ── Build main-column content ─────────────────────────────────────────────
     main_parts: List[str] = []
@@ -1220,17 +1258,27 @@ def _build_html_layout_b(candidate_data: Dict, tmpl: Dict) -> str:
             f'</div>'
         )
 
-    # Role title block — pushes Professional Summary below the sidebar name
+    # Build header content: name + role subtitle
+    name_str = candidate_data.get('name', '').strip().upper()
     experience = candidate_data.get('experience', [])
-    current_role = ''
+    role_subtitle = ''
     if experience:
         first_exp = experience[0]
         role_parts = [first_exp.get('title', '')]
         if first_exp.get('company'):
             role_parts.append(first_exp['company'])
-        current_role = '  |  '.join(r for r in role_parts if r)
-    if current_role:
-        main_parts.append(f'<div class="main-role">{e(current_role)}</div>')
+        role_subtitle = '  ·  '.join(r for r in role_parts if r)
+    if contact.get('location') and role_subtitle:
+        role_subtitle += f'  ·  {contact["location"]}'
+    elif contact.get('location'):
+        role_subtitle = contact['location']
+
+    header_html = (
+        f'<div class="page-header">'
+        f'  <div class="header-name">{e(name_str)}</div>'
+        + (f'  <div class="header-role">{e(role_subtitle)}</div>' if role_subtitle else '')
+        + f'</div>'
+    )
 
     summary = candidate_data.get('professional_summary', '').strip()
     if summary:
@@ -1295,26 +1343,41 @@ def _build_html_layout_b(candidate_data: Dict, tmpl: Dict) -> str:
     width: 21cm;
     min-height: 29.7cm;
     display: flex;
+    flex-direction: column;
     background: #fff;
+  }}
+  /* ── Full-width header ── */
+  .page-header {{
+    background: {sb_bg};
+    padding: 0.9cm 1.8cm 0.75cm 1.5cm;
+    flex-shrink: 0;
+  }}
+  .header-name {{
+    font-size: 22pt;
+    font-weight: 700;
+    color: {sb_text};
+    letter-spacing: 0.03em;
+    line-height: 1.1;
+  }}
+  .header-role {{
+    font-size: 9.5pt;
+    color: {sb_text};
+    opacity: 0.82;
+    margin-top: 5px;
+    letter-spacing: 0.04em;
+  }}
+  /* ── Body row (sidebar + main) ── */
+  .body-row {{
+    display: flex;
+    flex: 1;
   }}
   /* ── Sidebar ── */
   .sidebar {{
     width: 31%;
-    min-height: 29.7cm;
     background: {sb_bg};
-    padding: 1.8cm 1.4cm 2cm 1.5cm;
+    padding: 0.7cm 1.4cm 2cm 1.5cm;
     flex-shrink: 0;
     overflow: hidden;
-  }}
-  .sidebar-name {{
-    font-size: 13pt;
-    font-weight: 700;
-    color: {sb_text};
-    letter-spacing: 0.02em;
-    margin-bottom: 14px;
-    line-height: 1.25;
-    overflow-wrap: break-word;
-    word-break: break-word;
   }}
   .sb-section {{ margin-bottom: 14px; }}
   .sb-heading {{
@@ -1345,28 +1408,22 @@ def _build_html_layout_b(candidate_data: Dict, tmpl: Dict) -> str:
   /* ── Main column ── */
   .main {{
     flex: 1;
-    padding: 1.8cm 1.8cm 2cm 1.8cm;
+    padding: 0.7cm 1.8cm 2cm 1.8cm;
     min-width: 0;
-  }}
-  .main-role {{
-    font-size: 11pt;
-    font-weight: 600;
-    color: {tmpl["html_heading"]};
-    letter-spacing: 0.02em;
-    margin-bottom: 18px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid {tmpl["html_rule"]};
   }}
   {_base_css(tmpl, font_family)}
 </style>
 </head>
 <body>
 <div class="page">
-  <div class="sidebar">
-    {sidebar_html}
-  </div>
-  <div class="main">
-    {main_html}
+  {header_html}
+  <div class="body-row">
+    <div class="sidebar">
+      {sidebar_html}
+    </div>
+    <div class="main">
+      {main_html}
+    </div>
   </div>
 </div>
 </body>
