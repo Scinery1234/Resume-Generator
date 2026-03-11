@@ -1220,12 +1220,23 @@ def _build_html_layout_b(candidate_data: Dict, tmpl: Dict) -> str:
             f'</div>'
         )
 
+    # Role title block — pushes Professional Summary below the sidebar name
+    experience = candidate_data.get('experience', [])
+    current_role = ''
+    if experience:
+        first_exp = experience[0]
+        role_parts = [first_exp.get('title', '')]
+        if first_exp.get('company'):
+            role_parts.append(first_exp['company'])
+        current_role = '  |  '.join(r for r in role_parts if r)
+    if current_role:
+        main_parts.append(f'<div class="main-role">{e(current_role)}</div>')
+
     summary = candidate_data.get('professional_summary', '').strip()
     if summary:
         main_parts.append(main_section('Professional Summary',
             f'<p class="body-text">{e(summary)}</p>'))
 
-    experience = candidate_data.get('experience', [])
     if experience:
         exp_html = ''
         for exp in experience:
@@ -1334,6 +1345,15 @@ def _build_html_layout_b(candidate_data: Dict, tmpl: Dict) -> str:
     flex: 1;
     padding: 1.8cm 1.8cm 2cm 1.8cm;
     min-width: 0;
+  }}
+  .main-role {{
+    font-size: 11pt;
+    font-weight: 600;
+    color: {tmpl["html_heading_color"]};
+    letter-spacing: 0.02em;
+    margin-bottom: 18px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid {tmpl["html_rule_color"]};
   }}
   {_base_css(tmpl, font_family)}
 </style>
