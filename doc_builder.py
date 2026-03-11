@@ -1349,11 +1349,11 @@ def _build_html_layout_b(candidate_data: Dict, tmpl: Dict) -> str:
   .main-role {{
     font-size: 11pt;
     font-weight: 600;
-    color: {tmpl["html_heading_color"]};
+    color: {tmpl["html_heading"]};
     letter-spacing: 0.02em;
     margin-bottom: 18px;
     padding-bottom: 10px;
-    border-bottom: 1px solid {tmpl["html_rule_color"]};
+    border-bottom: 1px solid {tmpl["html_rule"]};
   }}
   {_base_css(tmpl, font_family)}
 </style>
