@@ -506,6 +506,11 @@ function PreviewMiniB({ p }) {
 
             {/* ── Main ── */}
             <div style={{ flex: 1, padding: '12px 9px 8px 8px', minWidth: 0 }}>
+                {/* Role title — pushes Professional Summary below the sidebar name */}
+                <div style={{ fontSize: 7.5, fontWeight: 600, color: p.headingColor, letterSpacing: '0.02em',
+                    marginBottom: 6, paddingBottom: 4, borderBottom: `1px solid ${p.ruleColor}` }}>
+                    Senior Software Engineer  |  Atlassian
+                </div>
                 <div style={{ marginBottom: 6 }}>
                     <div style={{ fontSize: 6.5, fontWeight: 700, color: p.headingColor, letterSpacing: '0.07em', marginBottom: 2 }}>
                         PROFESSIONAL SUMMARY
