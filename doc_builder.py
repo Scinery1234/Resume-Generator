@@ -1304,14 +1304,16 @@ def _build_html_layout_b(candidate_data: Dict, tmpl: Dict) -> str:
     background: {sb_bg};
     padding: 1.8cm 1.4cm 2cm 1.5cm;
     flex-shrink: 0;
+    overflow: hidden;
   }}
   .sidebar-name {{
-    font-size: 15pt;
+    font-size: 13pt;
     font-weight: 700;
     color: {sb_text};
-    letter-spacing: 0.04em;
+    letter-spacing: 0.02em;
     margin-bottom: 14px;
-    line-height: 1.2;
+    line-height: 1.25;
+    overflow-wrap: break-word;
     word-break: break-word;
   }}
   .sb-section {{ margin-bottom: 14px; }}

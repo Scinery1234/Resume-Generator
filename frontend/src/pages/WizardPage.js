@@ -480,9 +480,10 @@ function PreviewMiniB({ p }) {
     return (
         <div style={{ display: 'flex', background: '#fff', fontFamily: p.fontFamily, minHeight: '100%' }}>
             {/* ── Sidebar ── */}
-            <div style={{ width: '33%', background: p.sidebarBg, padding: '12px 7px 12px 9px', flexShrink: 0 }}>
+            <div style={{ width: '33%', background: p.sidebarBg, padding: '12px 7px 12px 9px', flexShrink: 0, overflow: 'hidden' }}>
                 <div style={{ fontSize: p.namePx, fontWeight: 700, color: p.sidebarText,
-                    letterSpacing: '0.03em', marginBottom: 10, lineHeight: 1.2 }}>
+                    letterSpacing: '0.02em', marginBottom: 10, lineHeight: 1.25,
+                    overflowWrap: 'break-word', wordBreak: 'break-word' }}>
                     ALEX JOHNSON
                 </div>
 
