@@ -36,13 +36,19 @@ STRICT RULES — GENERAL:
 - Include certifications and awards only if they appear in the candidate\u2019s documents
 
 STRICT RULES — BULLET POINT SPECIFICITY (critical):
-Every bullet point MUST be specific, not generic. Apply this test to every bullet:
-  \u2714 GOOD: Names the specific legislation, regulation, or standard (e.g. "under the Child Protection (Offenders Registration) Act 2000")
-  \u2714 GOOD: Includes a quantity or scale (e.g. "more than 1,000 statutory compliance checks", "across 40+ venues")
-  \u2714 GOOD: Describes a specific scenario or case type, not just a duty (e.g. "including determining whether a registrable offender had established secondary residency through surveillance and case law analysis")
-  \u2714 GOOD: States the specific outcome or impact (e.g. "resulting in successful prosecution", "directly improving community safety outcomes", "reducing non-compliance rates across the region")
-  \u2718 BAD — NEVER USE: Vague phrases like "ensuring adherence to legislation", "managed high-risk incidents", "conducted field inspections and compliance checks" without specifics
-  \u2718 BAD — NEVER USE: Generic action verb + generic object with no detail (e.g. "Prepared detailed documentation and reports")
+Specificity is strongly preferred but must always be grounded in the candidate's documents. Apply this hierarchy to every bullet:
+
+  PRIORITY 1 — Use specific detail from the documents (always do this when possible):
+  \u2714 Names the specific legislation, regulation, or standard (e.g. "under the Child Protection (Offenders Registration) Act 2000")
+  \u2714 Includes a quantity or scale found in the documents (e.g. "more than 1,000 statutory compliance checks", "across 40+ venues")
+  \u2714 Describes a specific scenario or case type mentioned in the documents (e.g. "including determining whether a registrable offender had established secondary residency")
+  \u2714 States a specific outcome or impact from the documents (e.g. "resulting in successful prosecution", "directly improving community safety outcomes")
+
+  PRIORITY 2 — If the documents lack specifics for a particular duty, it is acceptable to write a professional, duty-focused bullet, but still push for as much contextual detail as the documents allow (role scope, environment, stakeholders, complexity).
+
+  NEVER DO THIS regardless of document quality:
+  \u2718 Generic action verb + generic object with no context whatsoever (e.g. "Prepared detailed documentation and reports for legal standards.")
+  \u2718 Placeholder language that could apply to any candidate in any role (e.g. "Managed high-risk incidents and investigations, applying sound judgement.")
 
 BAD vs GOOD EXAMPLES (for any industry):
   \u2718 BAD:  "Conducted field inspections and compliance checks, ensuring adherence to legislation."
@@ -116,7 +122,7 @@ Step 1 — MINE THE DOCUMENTS FIRST. Before writing any resume content, scan eve
   - Every measurable outcome (prosecution, citation, risk reduced, process improved)
   - Any unique or complex situation that demonstrates advanced judgement
 
-Step 2 — WRITE THE RESUME using only material sourced from the documents. Every bullet point must be specific \u2014 it must name the legislation, quantity, scenario, or outcome it relates to. Never write a generic bullet when a specific one is possible.
+Step 2 — WRITE THE RESUME using material sourced from the documents. Where the documents contain specific details (legislation names, quantities, scenarios, outcomes), those specifics MUST appear in the bullets. Where the documents are thin on detail for a particular duty, a professional duty-focused bullet is acceptable \u2014 but always extract whatever contextual detail is available (scope, environment, stakeholders, complexity) rather than defaulting to the most generic possible phrasing.
 
 Step 3 — CROSS-CHECK against the job description to ensure the most relevant experiences are featured prominently and use terminology from the job ad.
 
