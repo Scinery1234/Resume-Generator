@@ -105,6 +105,9 @@ def init_db():
         if "guest_edit_count" not in existing_cols:
             conn.execute(text("ALTER TABLE resumes ADD COLUMN guest_edit_count INTEGER DEFAULT 0"))
             conn.commit()
+        if "template_id" not in existing_cols:
+            conn.execute(text("ALTER TABLE resumes ADD COLUMN template_id VARCHAR DEFAULT 'modern'"))
+            conn.commit()
 
 
 def get_db():
