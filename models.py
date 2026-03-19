@@ -114,6 +114,9 @@ class Resume(Base):
     # Pre-rendered HTML stored to avoid rebuilding the preview on every request
     preview_html = Column(Text)
 
+    # Template/layout used to render this resume (e.g. 'modern', 'classic')
+    template_id = Column(String, default='modern')
+
     # Number of AI edits consumed by a guest (no account) on this resume
     guest_edit_count = Column(Integer, default=0)
 

@@ -233,6 +233,7 @@ function ResultView({ result, onReset, onUpdate }) {
                         </div>
                     ) : (
                         <iframe
+                            key={activeTemplate}
                             title="Resume Preview"
                             srcDoc={result.preview_html}
                             className="gen-preview-frame"
@@ -724,6 +725,7 @@ const WizardPage = () => {
                 preview_html: updatedResult.preview_html,
                 data: updatedResult.data,
                 prompt_count: updatedResult.prompt_count,
+                ...(updatedResult.filename && { filename: updatedResult.filename }),
             });
         };
         
