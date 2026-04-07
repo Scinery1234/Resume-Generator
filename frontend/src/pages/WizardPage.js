@@ -695,20 +695,7 @@ const WizardPage = () => {
             const data = await resumeAPI.generate(files, jobDesc, additionalInfo, null, template);
             setResult({ ...data, template });
         } catch (err) {
-            // Use the enhanced error message from the API interceptor
-            let msg = err.message || 'Generation failed. Please try again.';
-            
-            // Additional specific error handling
-            if (err.response?.status === 503) {
-                msg = 'OpenAI API key is not configured. Please contact the administrator.';
-            } else if (err.response?.status === 400) {
-                msg = err.response?.data?.detail || msg;
-            } else if (err.response?.status >= 500) {
-                msg = 'Server error occurred. Please try again later.';
-            } else if (!err.response && !err.message?.includes('Could not reach')) {
-                msg = 'Could not reach the server. Please ensure the backend is running on http://localhost:8000';
-            }
-            
+            const msg = err.response?.data?.detail || 'Generation failed. Please try again.';
             setError(msg);
             console.error('Resume generation error:', err);
         } finally {
