@@ -856,9 +856,12 @@ async def update_resume_inline(
     db.commit()
 
     # Return flat — same shape as the generate and edit endpoints.
+    # Include the new filename so the frontend download button always fetches
+    # the file that matches the current preview (not the pre-edit version).
     return {
         "preview_html": preview_html,
         "data": resume_data,
+        "filename": safe_filename,
     }
 
 
