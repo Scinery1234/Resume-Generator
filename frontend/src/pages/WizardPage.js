@@ -711,6 +711,8 @@ const WizardPage = () => {
                 preview_html: updatedResult.preview_html,
                 data: updatedResult.data,
                 prompt_count: updatedResult.prompt_count,
+                ...(updatedResult.filename  && { filename:  updatedResult.filename }),
+                ...(updatedResult.template_id && { template: updatedResult.template_id }),
             });
         };
         
