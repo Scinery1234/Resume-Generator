@@ -201,7 +201,7 @@ DUMMY_CANDIDATE = {
         "location": "Sydney, NSW",
         "linkedin": "linkedin.com/in/alexjohnson",
     },
-    "professional_summary": (
+    "summary": (
         "Results-driven software engineer with 6+ years delivering scalable "
         "web applications. Proven track record leading cross-functional teams "
         "and shipping high-impact features on time and within scope."
@@ -232,15 +232,19 @@ DUMMY_CANDIDATE = {
     ],
     "education": [
         {
-            "degree":          "Bachelor of Computer Science",
-            "field":           "Software Engineering",
-            "institution":     "University of New South Wales",
-            "graduation_year": "2018",
+            "degree":      "Bachelor of Computer Science",
+            "institution": "University of New South Wales",
+            "year":        "2018",
         }
     ],
     "certifications":  ["AWS Certified Solutions Architect", "Google Cloud Professional Developer"],
     "awards":          [],
-    "technical_skills": ["Python", "JavaScript", "TypeScript", "PostgreSQL", "Redis", "Kubernetes", "Terraform"],
+    "technical_skills": {
+        "Languages":  ["Python", "JavaScript", "TypeScript"],
+        "Databases":  ["PostgreSQL", "Redis"],
+        "Platforms":  ["Kubernetes", "Terraform"],
+    },
+    "additional_information": [],
 }
 
 
@@ -251,6 +255,73 @@ DUMMY_CANDIDATE = {
 def _get_template(template_id: str) -> Dict:
     """Return a template config dict, falling back to 'modern'."""
     return TEMPLATES.get((template_id or "modern").lower(), TEMPLATES["modern"])
+
+
+def _normalize_resume_data(data: Dict) -> Dict:
+    """Return a copy of *data* with legacy and new schema field names reconciled.
+
+    The new JSON schema uses ``summary`` and ``education[].year``.
+    The old schema used ``professional_summary`` and ``education[].graduation_year``.
+    All rendering code reads the legacy keys, so this normaliser ensures both are
+    always populated regardless of which schema the data was generated with.
+    """
+    d = dict(data)
+
+    # summary ↔ professional_summary
+    new_val = d.get('summary', '')
+    old_val = d.get('professional_summary', '')
+    resolved = new_val or old_val
+    d['summary'] = resolved
+    d['professional_summary'] = resolved
+
+    # education: year ↔ graduation_year
+    if 'education' in d:
+        normalised_edu = []
+        for edu in d['education']:
+            edu = dict(edu)
+            yr = edu.get('year') or edu.get('graduation_year', '')
+            edu['year'] = yr
+            edu['graduation_year'] = yr
+            normalised_edu.append(edu)
+        d['education'] = normalised_edu
+
+    return d
+
+
+def _tech_skills_docx_lines(tech) -> List[str]:
+    """Convert technical_skills (dict or list) to a list of display strings.
+
+    Dict  → one string per category: "Platforms: AWS, Azure"
+    List  → original list of strings
+    Empty → empty list
+    """
+    if not tech:
+        return []
+    if isinstance(tech, dict):
+        lines = []
+        for cat, items in tech.items():
+            if items:
+                lines.append(f"{cat}: {', '.join(str(i) for i in items)}")
+        return lines
+    # list / fallback
+    return [str(s) for s in tech]
+
+
+def _tech_skills_html(tech, e) -> str:
+    """Return an HTML snippet for technical_skills (dict or list).
+
+    Dict  → one ``<p>`` per category.
+    List  → single ``<p>`` with dot separators.
+    """
+    if not tech:
+        return ''
+    if isinstance(tech, dict):
+        lines = []
+        for cat, items in tech.items():
+            if items:
+                lines.append(f'<p class="body-text"><strong>{e(cat)}:</strong> {e(", ".join(str(i) for i in items))}</p>')
+        return ''.join(lines)
+    return f'<p class="body-text">{"  ·  ".join(e(str(s)) for s in tech)}</p>'
 
 
 def _cm_to_twips(cm: float) -> int:
@@ -587,13 +658,33 @@ def _add_body_sections_a(doc: Document, candidate_data: Dict, tmpl: Dict):
 
     # ── Technical Skills ─────────────────────────────────────────────────────
     tech_skills = candidate_data.get('technical_skills', [])
-    if tech_skills:
+    ts_lines = _tech_skills_docx_lines(tech_skills)
+    if ts_lines:
         _section_heading(doc, 'Technical Skills', tmpl)
-        p = doc.add_paragraph()
-        _set_para_spacing(p, before=3, after=6)
-        r = p.add_run('  ·  '.join(str(s) for s in tech_skills))
-        r.font.name = tmpl["body_font"]
-        r.font.size = tmpl["body_size"]
+        if isinstance(tech_skills, dict):
+            for line in ts_lines:
+                p = doc.add_paragraph()
+                _set_para_spacing(p, before=2, after=2)
+                r = p.add_run(line)
+                r.font.name = tmpl["body_font"]
+                r.font.size = tmpl["body_size"]
+        else:
+            p = doc.add_paragraph()
+            _set_para_spacing(p, before=3, after=6)
+            r = p.add_run('  ·  '.join(ts_lines))
+            r.font.name = tmpl["body_font"]
+            r.font.size = tmpl["body_size"]
+
+    # ── Additional Information ────────────────────────────────────────────────
+    additional_info = [i for i in candidate_data.get('additional_information', []) if i]
+    if additional_info:
+        _section_heading(doc, 'Additional Information', tmpl)
+        for item in additional_info:
+            p = doc.add_paragraph()
+            _set_para_spacing(p, before=1, after=1)
+            r = p.add_run(str(item))
+            r.font.name = tmpl["body_font"]
+            r.font.size = tmpl["body_size"]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -877,14 +968,36 @@ def _build_word_layout_b(doc: Document, candidate_data: Dict, tmpl: Dict):
 
     # TECHNICAL SKILLS
     tech_skills = candidate_data.get('technical_skills', [])
-    if tech_skills:
+    ts_lines = _tech_skills_docx_lines(tech_skills)
+    if ts_lines:
         _mn_heading(mn, 'Technical Skills', tmpl)
-        p = mn.add_paragraph()
-        _set_para_spacing(p, before=3, after=6)
-        _set_para_indent(p, _MN_PAD_L, _MN_PAD_R)
-        r = p.add_run('  ·  '.join(str(s) for s in tech_skills))
-        r.font.name = tmpl["body_font"]
-        r.font.size = tmpl["body_size"]
+        if isinstance(tech_skills, dict):
+            for line in ts_lines:
+                p = mn.add_paragraph()
+                _set_para_spacing(p, before=2, after=2)
+                _set_para_indent(p, _MN_PAD_L, _MN_PAD_R)
+                r = p.add_run(line)
+                r.font.name = tmpl["body_font"]
+                r.font.size = tmpl["body_size"]
+        else:
+            p = mn.add_paragraph()
+            _set_para_spacing(p, before=3, after=6)
+            _set_para_indent(p, _MN_PAD_L, _MN_PAD_R)
+            r = p.add_run('  ·  '.join(ts_lines))
+            r.font.name = tmpl["body_font"]
+            r.font.size = tmpl["body_size"]
+
+    # ADDITIONAL INFORMATION
+    additional_info = [i for i in candidate_data.get('additional_information', []) if i]
+    if additional_info:
+        _mn_heading(mn, 'Additional Information', tmpl)
+        for item in additional_info:
+            p = mn.add_paragraph()
+            _set_para_spacing(p, before=1, after=1)
+            _set_para_indent(p, _MN_PAD_L, _MN_PAD_R)
+            r = p.add_run(str(item))
+            r.font.name = tmpl["body_font"]
+            r.font.size = tmpl["body_size"]
 
     # Bottom spacer
     gap = mn.add_paragraph()
@@ -1037,9 +1150,15 @@ def _html_body_sections(candidate_data: Dict, tmpl: Dict) -> List[str]:
 
     # Technical Skills
     tech_skills = candidate_data.get('technical_skills', [])
-    if tech_skills:
-        parts.append(section('Technical Skills',
-            f'<p class="body-text">{"  ·  ".join(e(str(s)) for s in tech_skills)}</p>'))
+    ts_html = _tech_skills_html(tech_skills, e)
+    if ts_html:
+        parts.append(section('Technical Skills', ts_html))
+
+    # Additional Information
+    additional_info = [i for i in candidate_data.get('additional_information', []) if i]
+    if additional_info:
+        ai_html = ''.join(f'<p class="body-text">{e(str(i))}</p>' for i in additional_info)
+        parts.append(section('Additional Information', ai_html))
 
     return parts
 
@@ -1319,9 +1438,14 @@ def _build_html_layout_b(candidate_data: Dict, tmpl: Dict) -> str:
         main_parts.append(main_section('Awards & Recognition', a_html))
 
     tech_skills = candidate_data.get('technical_skills', [])
-    if tech_skills:
-        main_parts.append(main_section('Technical Skills',
-            f'<p class="body-text">{"  ·  ".join(e(str(s)) for s in tech_skills)}</p>'))
+    ts_html = _tech_skills_html(tech_skills, e)
+    if ts_html:
+        main_parts.append(main_section('Technical Skills', ts_html))
+
+    additional_info = [i for i in candidate_data.get('additional_information', []) if i]
+    if additional_info:
+        ai_html = ''.join(f'<p class="body-text">{e(str(i))}</p>' for i in additional_info)
+        main_parts.append(main_section('Additional Information', ai_html))
 
     main_html = ''.join(main_parts)
 
@@ -1564,6 +1688,7 @@ class ResumeBuilder:
             candidate_data: Resume data dictionary.
             template_id:    One of "modern", "classic", "creative", "minimal", "executive".
         """
+        candidate_data = _normalize_resume_data(candidate_data)
         tmpl   = _get_template(template_id)
         layout = tmpl.get("layout", "A")
 
@@ -1595,6 +1720,7 @@ class ResumeBuilder:
             candidate_data: Resume data dictionary.
             template_id:    One of "modern", "classic", "creative", "minimal", "executive".
         """
+        candidate_data = _normalize_resume_data(candidate_data)
         tmpl   = _get_template(template_id)
         layout = tmpl.get("layout", "A")
 

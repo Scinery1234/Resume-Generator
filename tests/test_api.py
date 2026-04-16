@@ -435,14 +435,17 @@ class TestGenerateFromDocuments:
         assert resp.status_code in (400, 422)
         assert resp.status_code != 200
 
-    def test_generate_without_job_description_returns_422(self):
+    def test_generate_without_job_description_uses_general_mode(self):
+        # job_description is now optional — omitting it triggers general mode.
+        # Without an OpenAI key the request reaches the 503 check, confirming
+        # it was accepted by form validation (not rejected with 422).
         txt = b"Jane Smith\nSoftware Engineer\n8 years Python experience"
         resp = client.post(
             "/api/generate",
             files=[("files", ("resume.txt", io.BytesIO(txt), "text/plain"))],
         )
-        # job_description is a required Form field → 422 Unprocessable Entity
-        assert resp.status_code == 422
+        # Must NOT be 422 (form validation error) — the request is structurally valid.
+        assert resp.status_code != 422
 
     def test_generate_no_openai_key_returns_503(self, monkeypatch):
         monkeypatch.setattr("main.openai_client", None)

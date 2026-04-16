@@ -157,26 +157,30 @@ class ExperienceItem(BaseModel):
     company: str
     location: str
     dates: str
-    description: str
+    description: str = ""
     bullets: List[str] = []
 
 class EducationItem(BaseModel):
     degree: str
     institution: str
-    field: str
-    graduation_year: str
+    # New schema uses "year"; old schema used "graduation_year" — both accepted
+    year: Optional[str] = ""
+    graduation_year: Optional[str] = ""  # kept for backward compatibility
+    field: Optional[str] = ""            # kept for backward compatibility
 
 class CandidateInput(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     contact: ContactInfo
-    professional_summary: str = Field(..., min_length=10, max_length=500)
+    # New schema uses "summary"; old schema used "professional_summary" — both accepted
+    summary: Optional[str] = Field(default="", max_length=2000)
+    professional_summary: Optional[str] = Field(default="", max_length=2000)
     key_skills: List[str] = Field(default_factory=list)
     experience: List[ExperienceItem] = Field(default_factory=list)
     education: List[EducationItem] = Field(default_factory=list)
     certifications: List[str] = Field(default_factory=list)
     awards: List[str] = Field(default_factory=list)
-    technical_skills: List[str] = Field(default_factory=list)
-    additional_information: Optional[str] = None
+    technical_skills: Optional[object] = Field(default_factory=list)  # dict or list
+    additional_information: Optional[List[str]] = Field(default_factory=list)
     user_id: Optional[int] = None
 
 class UserSignup(BaseModel):
@@ -325,7 +329,7 @@ async def extract_text_from_upload(file: UploadFile) -> str:
 @app.post("/api/generate", tags=["Resume Generation"])
 async def generate_from_documents(
     files: List[UploadFile] = File(default=[]),
-    job_description: str = Form(...),
+    job_description: str = Form(default=""),
     additional_info: str = Form(default=""),
     template: str = Form(default="modern"),
     user_id: Optional[int] = Form(default=None),  # Optional user ID for logged-in users
@@ -334,11 +338,13 @@ async def generate_from_documents(
     """
     Generate a tailored Australian resume from:
     - Up to 5 uploaded supporting documents (old resumes, LinkedIn exports, etc.)
-    - A pasted job description
+    - An optional job description (omit for general-mode generation)
     - Optional additional information (responses to criteria, specific examples, etc.)
 
-    The AI extracts all candidate information from the documents and tailors
-    the resume to match the requirements of the provided job description.
+    When a job description is provided the resume is fully tailored to that role
+    (customisation mode). When omitted the AI generates a strong general-purpose
+    resume emphasising recency and seniority (general mode).
+
     Returns a .docx download URL and an HTML preview.
     """
     # Validate inputs first (before checking service availability)
@@ -352,8 +358,7 @@ async def generate_from_documents(
         raise HTTPException(status_code=400, detail="Maximum 5 files are allowed.")
 
     job_description = job_description.strip()
-    if not job_description:
-        raise HTTPException(status_code=400, detail="Job description cannot be empty.")
+    # job_description is now optional — empty string triggers general mode
 
     # Check OpenAI service availability after input validation
     if not openai_client:
@@ -391,8 +396,11 @@ async def generate_from_documents(
     
     user_prompt = build_generate_prompt(documents_text, job_description, additional_info_text)
     
-    # Log prompt length for debugging
-    logger.info(f"Generated prompt length: {len(user_prompt)} chars (includes additional info: {bool(additional_info_text)})")
+    generation_mode = "customisation" if job_description else "general"
+    logger.info(
+        "Prompt built: mode=%s, length=%d chars, additional_info=%s",
+        generation_mode, len(user_prompt), bool(additional_info_text),
+    )
 
     # Call OpenAI to generate the resume JSON
     try:
