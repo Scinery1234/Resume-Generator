@@ -468,7 +468,7 @@ class TestGenerateFromDocuments:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] == "success"
+        # Generate returns a flat response (no standardize_response wrapper)
         assert "filename" in data
         assert data["filename"].endswith(".docx")
         assert "download_url" in data

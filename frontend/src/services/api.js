@@ -162,7 +162,10 @@ export const resumeAPI = {
       
       const result = await response.json();
       console.log('✅ Generation successful:', result);
-      return result;
+      // Unwrap standardize_response envelope { status, data: {...} } if present,
+      // so callers always receive a flat object with filename/preview_html/resume_id
+      // at the top level.
+      return (result && result.status === 'success' && result.data) ? result.data : result;
     } catch (error) {
       // Enhanced error handling
       console.error('❌ Generate error details:', {
@@ -248,7 +251,9 @@ export const resumeAPI = {
         'Content-Type': 'application/json',
       },
     });
-    return response.data;
+    const result = response.data;
+    // Unwrap standardize_response envelope if present
+    return (result && result.status === 'success' && result.data) ? result.data : result;
   },
   
   switchTemplate: async (resumeId, templateId, userId = null) => {

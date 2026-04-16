@@ -684,11 +684,6 @@ const WizardPage = () => {
             setError('Please upload at least one supporting document (e.g. your old resume).');
             return;
         }
-        if (!jobDesc.trim()) {
-            setError('Please paste the job description before generating.');
-            return;
-        }
-
         setLoading(true);
         setError(''); // Clear previous errors
         try {
@@ -705,13 +700,18 @@ const WizardPage = () => {
 
     // ── Result screen ─────────────────────────────────────────────────────────
     if (result) {
+        // Use a functional state update (prev =>) so this callback always
+        // operates on the latest state even if React batches renders.
+        // Only overwrite fields that the server actually returned — preserves
+        // resume_id, filename, and template across edits and template switches.
         const handleResultUpdate = (updatedResult) => {
-            setResult({
-                ...result,
-                preview_html: updatedResult.preview_html,
-                data: updatedResult.data,
-                prompt_count: updatedResult.prompt_count,
-            });
+            setResult(prev => ({
+                ...prev,
+                ...(updatedResult.preview_html  !== undefined && { preview_html:  updatedResult.preview_html }),
+                ...(updatedResult.data          !== undefined && { data:          updatedResult.data }),
+                ...(updatedResult.filename      !== undefined && { filename:      updatedResult.filename }),
+                ...(updatedResult.prompt_count  !== undefined && { prompt_count:  updatedResult.prompt_count }),
+            }));
         };
         
         return (

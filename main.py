@@ -456,13 +456,15 @@ async def generate_from_documents(
         db.rollback()
 
     logger.info("Resume generated: %s (name: %s)", safe_filename, resume_data.get("name", "unknown"))
-    return standardize_response({
+    # Return a flat response — NOT wrapped in standardize_response — so the
+    # frontend can access filename, preview_html, and resume_id directly.
+    return {
         "filename": safe_filename,
         "download_url": f"/api/resumes/download-file/{safe_filename}",
         "preview_html": preview_html,
         "data": resume_data,
-        "resume_id": resume_id,  # Include resume_id for editing
-    })
+        "resume_id": resume_id,
+    }
 
 
 # ── Legacy wizard endpoint (kept for backward compatibility) ──────────────────
@@ -852,11 +854,12 @@ async def update_resume_inline(
     resume.updated_at = datetime.utcnow()
     
     db.commit()
-    
-    return standardize_response({
+
+    # Return flat — same shape as the generate and edit endpoints.
+    return {
         "preview_html": preview_html,
         "data": resume_data,
-    })
+    }
 
 
 @app.post("/api/resumes/{resume_id}/switch-template", tags=["Resume Editing"])
