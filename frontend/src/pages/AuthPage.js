@@ -31,8 +31,8 @@ const AuthPage = () => {
                 localStorage.setItem('userId', response.user_id);
                 // Trigger storage event so other components update
                 window.dispatchEvent(new Event('storage'));
-                // Redirect to my resumes page
-                navigate('/my-resumes');
+                // Redirect to wizard page
+                navigate('/wizard');
             }
         } catch (err) {
             const errorMessage = err.response?.data?.detail || 

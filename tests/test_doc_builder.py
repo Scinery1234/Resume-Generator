@@ -472,7 +472,8 @@ class TestBuildWordDocumentWithTemplates:
         path = str(tmp_path / "modern.docx")
         builder.build_word_document(path, FULL_CANDIDATE, template_id="modern")
         doc = Document(path)
-        sidebar_text = " ".join(p.text for p in doc.tables[0].cell(0, 0).paragraphs)
+        # doc.tables[0] is the full-width header table; doc.tables[1] is the body table
+        sidebar_text = " ".join(p.text for p in doc.tables[1].cell(0, 0).paragraphs)
         assert "jane.smith@email.com" in sidebar_text
 
     def test_layout_b_main_contains_experience(self, builder, tmp_path):
@@ -480,7 +481,7 @@ class TestBuildWordDocumentWithTemplates:
         path = str(tmp_path / "modern.docx")
         builder.build_word_document(path, FULL_CANDIDATE, template_id="modern")
         doc = Document(path)
-        main_text = " ".join(p.text for p in doc.tables[0].cell(0, 1).paragraphs)
+        main_text = " ".join(p.text for p in doc.tables[1].cell(0, 1).paragraphs)
         assert "Senior Software Engineer" in main_text
 
     def test_layout_c_name_is_in_first_paragraph(self, builder, tmp_path):

@@ -3,16 +3,16 @@
  */
 import { downloadBlob } from '../utils/fileDownload';
 
-// Mock URL.createObjectURL and URL.revokeObjectURL
-global.URL.createObjectURL = jest.fn(() => 'mock-url');
-global.URL.revokeObjectURL = jest.fn();
-
 // Mock document.createElement and related methods
 const mockClick = jest.fn();
 const mockAppendChild = jest.fn();
 const mockRemoveChild = jest.fn();
 
 beforeEach(() => {
+  jest.clearAllMocks();
+  // Re-initialize URL mocks after clearing so implementations are fresh
+  global.URL.createObjectURL = jest.fn(() => 'mock-url');
+  global.URL.revokeObjectURL = jest.fn();
   document.createElement = jest.fn(() => ({
     href: '',
     download: '',
@@ -20,7 +20,6 @@ beforeEach(() => {
   }));
   document.body.appendChild = mockAppendChild;
   document.body.removeChild = mockRemoveChild;
-  jest.clearAllMocks();
 });
 
 describe('downloadBlob', () => {

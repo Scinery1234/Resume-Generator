@@ -437,6 +437,7 @@ async def generate_from_documents(
             contact_info=json.dumps(resume_data.get("contact", {})),
             resume_data=json.dumps(resume_data),
             preview_html=preview_html,
+            template_id=template,
         )
         db.add(resume_record)
         db.commit()
@@ -771,13 +772,14 @@ Return ONLY the updated JSON object — no other text."""
             timeout=120,
         )
         updated_data = json.loads(response.choices[0].message.content)
-        
-        # Update resume
+
+        # Update resume — preserve the template that was last applied
+        active_template = resume.template_id or "modern"
         resume_builder = ResumeBuilder()
         resume_filename = f"resume_{uuid.uuid4().hex[:10]}.docx"
         resume_path = RESUMES_DIR / resume_filename
-        resume_builder.build_word_document(str(resume_path), updated_data)
-        preview_html = resume_builder.build_html_preview(updated_data)
+        resume_builder.build_word_document(str(resume_path), updated_data, template_id=active_template)
+        preview_html = resume_builder.build_html_preview(updated_data, template_id=active_template)
         
         resume.resume_data = json.dumps(updated_data)
         resume.preview_html = preview_html
@@ -827,13 +829,14 @@ async def update_resume_inline(
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
     
-    # Rebuild preview and document
+    # Rebuild preview and document — preserve the template that was last applied
+    active_template = resume.template_id or "modern"
     resume_builder = ResumeBuilder()
     resume_filename = f"resume_{uuid.uuid4().hex[:10]}.docx"
     safe_filename = sanitize_filename(resume_filename)
     resume_path = RESUMES_DIR / safe_filename
-    resume_builder.build_word_document(str(resume_path), resume_data)
-    preview_html = resume_builder.build_html_preview(resume_data)
+    resume_builder.build_word_document(str(resume_path), resume_data, template_id=active_template)
+    preview_html = resume_builder.build_html_preview(resume_data, template_id=active_template)
     
     resume.resume_data = json.dumps(resume_data)
     resume.preview_html = preview_html
@@ -885,6 +888,7 @@ async def switch_resume_template(
 
     resume.preview_html = preview_html
     resume.file_path = str(resume_path)
+    resume.template_id = template_id
     resume.updated_at = datetime.utcnow()
     db.commit()
 
