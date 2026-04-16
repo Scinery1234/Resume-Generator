@@ -23,6 +23,15 @@ SYSTEM_PROMPT_GENERATE = """You are an expert Australian resume writer. Your tas
 
 ## STAGE 0 — INPUT HANDLING
 
+### Content Preservation — Non-Negotiable
+Before any de-emphasis or tailoring decisions are made, absorb ALL substantive information from the source documents. The generated resume must never contain less specific detail than is available in the source. Specific items that must be preserved:
+- Every named employer, project, system, tool, client, or initiative mentioned
+- Every specific metric, number, percentage, or dollar figure (reproduced exactly)
+- Every qualification, certification, and educational credential
+- The full career arc — all roles, all dates, all tenures
+
+Bullet count ranges are **guidelines for de-emphasis of older or less relevant roles only**. For current, highly relevant roles: if the source material supports 7 or 8 distinct achievements, include them. Do not compress a rich, relevant role to meet a minimum count. The counts below are floors for de-emphasised roles, not ceilings for relevant ones.
+
 ### Foundation Mode
 Determine what has been provided:
 
@@ -32,8 +41,18 @@ Extract all experience, education, skills, and facts from them. These are the au
 **Nothing provided → Do not generate.** Return an error JSON: {"error": "No source documents provided."}
 
 ### JD Mode
-**JD provided → Customisation mode.**
+
+**Full JD provided → Customisation mode.**
 Every section is written with the JD as the alignment target. Mirror the JD's exact phrasing (e.g. if it says "stakeholder engagement" not "stakeholder management", use that phrase). Weave JD keywords naturally throughout — Summary, Key Skills, and Experience bullets.
+
+**Minimal JD — job title or brief role signal only (e.g. "Marketing Manager", "Senior Data Engineer").**
+Treat the title as a role signal and use your knowledge of what that role typically requires to inform emphasis and framing. Specifically:
+- Identify the skills, responsibilities, and experience that are most valued for that role type and seniority level
+- Use those inferences to decide which of the candidate's existing achievements to foreground, which skills to prioritise in Key Skills, and how to frame the Professional Summary
+- Mirror common terminology for that role in the Summary and Key Skills (e.g. for "Product Manager": roadmap, stakeholders, prioritisation, go-to-market)
+- Do NOT invent role requirements that aren't supported by the candidate's actual experience
+- Do NOT fabricate any candidate information whatsoever — inference affects only emphasis and framing, never content
+- If the candidate's background has minimal overlap with the inferred role requirements, note this honestly in the Summary framing rather than overstating fit
 
 **No JD provided → General mode.**
 Generate a strong, well-rounded resume from the foundation documents. Emphasise recency and seniority — most recent and senior roles get the most real estate.
@@ -55,12 +74,9 @@ Treat factual claims as valid; incorporate relevant ones into the resume natural
 ## STAGE 1 — ANALYSIS
 
 ### From the JD (if provided)
-- Job title and seniority level
-- Must-have vs nice-to-have skills (explicit and implied)
-- ATS keywords — frequency signals priority, weight accordingly
-- Tone of the organisation (corporate, startup, government)
-- Repeated terms — mirror exact phrasing, not synonyms
-- Formal or implied selection criteria
+First, assess the JD's depth:
+- **Full JD**: extract job title, seniority, must-have and nice-to-have skills, ATS keywords (frequency = priority), organisational tone, repeated phrasing to mirror, formal or implied selection criteria
+- **Minimal JD (title/brief only)**: infer the above from your knowledge of that role. Think: what does this role type typically require in Australian workplaces at the apparent seniority level? What skills and responsibilities are most valued? What terminology does the industry use? Use these inferences to guide framing and keyword selection — but never to invent candidate facts.
 
 ### From the Resume and Supporting Documents
 - Raw experience, tenure, and career arc
@@ -150,10 +166,11 @@ Mirror 2–3 JD keywords naturally — do not stuff. If the candidate is pivotin
 
 **4. Professional Experience**
 Reverse chronological. For each role: Title, Company, Location, Dates (Month Year – Month Year or Present), then achievement bullets.
-- 4–6 bullets for recent and relevant roles
-- 2–3 bullets for less relevant or older roles
-- 1–2 bullets (or a single line) for early-career or very old roles
+- Recent, highly relevant roles: use as many bullets as the source material supports — do not cap. If there are 8 strong, distinct achievements from the source, include all 8.
+- Less relevant or older roles: 2–3 bullets (de-emphasis by structure)
+- Early-career or very old roles: 1–2 bullets or a single line
 - Front-load the most JD-relevant bullets within each role
+- All specific details from the source — numbers, named systems, project names, team sizes — must appear in the output. Never drop a specific fact to shorten a bullet; if anything, condense the language but keep the fact.
 
 **5. Education and Training**
 Degree, institution, year — clean and minimal. Include relevant short courses or professional development if they support the JD. Most recent first.
@@ -263,16 +280,26 @@ def build_generate_prompt(documents_text: str, job_description: str, additional_
     """
     jd_stripped = job_description.strip() if job_description else ""
 
-    if jd_stripped:
-        mode_instruction = (
-            "GENERATION MODE: Customisation mode — tailor every section to the job description below. "
-            "Mirror the JD's exact keywords and phrasing throughout."
-        )
-    else:
+    # Classify the JD: full, minimal (just a title/brief signal), or absent
+    _jd_words = len(jd_stripped.split()) if jd_stripped else 0
+    if not jd_stripped:
         mode_instruction = (
             "GENERATION MODE: General mode — no job description has been provided. "
             "Write a strong, well-rounded resume based solely on the candidate's documents. "
             "Emphasise recency and seniority: most recent and most senior roles get the most real estate."
+        )
+    elif _jd_words <= 10:
+        mode_instruction = (
+            "GENERATION MODE: Minimal JD mode — the job description below is a brief role signal only "
+            "(likely just a job title or short phrase). "
+            "Infer the typical requirements, responsibilities, and valued skills for this role type and seniority level "
+            "from your own knowledge. Use those inferences to guide emphasis, framing, and keyword selection. "
+            "Do NOT fabricate any candidate information — inference affects framing only, never content."
+        )
+    else:
+        mode_instruction = (
+            "GENERATION MODE: Customisation mode — tailor every section to the job description below. "
+            "Mirror the JD's exact keywords and phrasing throughout."
         )
 
     prompt = f"""{mode_instruction}
