@@ -824,3 +824,196 @@ class TestSwitchTemplate:
             assert (resume.guest_edit_count or 0) == 0
         finally:
             db.close()
+
+
+# ── Template visual-differentiation tests ────────────────────────────────────
+
+class TestTemplateSwitchVisualOutput:
+    """
+    Verify that each template actually produces visually distinct HTML output
+    and that switching templates changes the preview and the .docx filename.
+
+    Visual markers checked per template:
+      modern    – navy sidebar (#1a375e), layout B (sidebar column)
+      classic   – serif font (Georgia), centered name, layout A (single-column)
+      creative  – purple header (#6b21a8), teal rule (#0891b2), layout C (header band)
+      minimal   – light-gray rule (#d1d5db), layout A (single-column)
+      executive – charcoal sidebar (#1c1c2e), amber rule (#b45309), layout B (sidebar)
+    """
+
+    # --- template-specific colour / layout signatures -------------------------
+
+    SIGNATURES = {
+        "modern":    {"colors": ["#1a375e", "#4a7aae", "#e8f0f8"], "layout": "sidebar"},
+        "classic":   {"colors": ["georgia", "#1a1a1a"],            "layout": "single-column"},
+        "creative":  {"colors": ["#6b21a8", "#0891b2"],            "layout": "header-band"},
+        "minimal":   {"colors": ["#d1d5db", "#374151"],            "layout": "single-column"},
+        "executive": {"colors": ["#1c1c2e", "#b45309"],            "layout": "sidebar"},
+    }
+
+    # Layout structural markers present in the HTML for each layout type
+    LAYOUT_MARKERS = {
+        "sidebar":       "sidebar",          # Layout B uses class/id "sidebar"
+        "single-column": "single-column",    # Layout A
+        "header-band":   "header-band",      # Layout C
+    }
+
+    def _generate_resume(self, monkeypatch, template="modern"):
+        _mock_openai_client(monkeypatch)
+        txt = b"Jane Smith\nSenior Software Engineer\n8 years Python"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer", "template": template},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    def _switch(self, resume_id, template_id):
+        resp = client.post(
+            f"/api/resumes/{resume_id}/switch-template",
+            data={"template_id": template_id},
+        )
+        assert resp.status_code == 200, f"Switch to {template_id} failed: {resp.text}"
+        return resp.json()
+
+    # --- colour / font markers present in each template's HTML ----------------
+
+    def test_modern_html_contains_navy_sidebar_colour(self, monkeypatch):
+        data = self._generate_resume(monkeypatch, "modern")
+        html = data["preview_html"].lower()
+        assert "#1a375e" in html, "Modern template must contain navy colour #1a375e"
+
+    def test_classic_html_contains_georgia_font(self, monkeypatch):
+        data = self._generate_resume(monkeypatch, "classic")
+        html = data["preview_html"].lower()
+        assert "georgia" in html, "Classic template must use Georgia (serif) font"
+
+    def test_classic_html_has_centered_name(self, monkeypatch):
+        data = self._generate_resume(monkeypatch, "classic")
+        html = data["preview_html"].lower()
+        assert "center" in html, "Classic template must centre the candidate name"
+
+    def test_creative_html_contains_purple_heading_colour(self, monkeypatch):
+        data = self._generate_resume(monkeypatch, "creative")
+        html = data["preview_html"].lower()
+        assert "#6b21a8" in html, "Creative template must contain purple #6b21a8"
+
+    def test_creative_html_contains_teal_rule_colour(self, monkeypatch):
+        data = self._generate_resume(monkeypatch, "creative")
+        html = data["preview_html"].lower()
+        assert "#0891b2" in html, "Creative template must contain teal rule #0891b2"
+
+    def test_minimal_html_contains_gray_rule_colour(self, monkeypatch):
+        data = self._generate_resume(monkeypatch, "minimal")
+        html = data["preview_html"].lower()
+        assert "#d1d5db" in html, "Minimal template must contain light-gray rule #d1d5db"
+
+    def test_executive_html_contains_charcoal_sidebar_colour(self, monkeypatch):
+        data = self._generate_resume(monkeypatch, "executive")
+        html = data["preview_html"].lower()
+        assert "#1c1c2e" in html, "Executive template must contain charcoal #1c1c2e"
+
+    def test_executive_html_contains_amber_rule_colour(self, monkeypatch):
+        data = self._generate_resume(monkeypatch, "executive")
+        html = data["preview_html"].lower()
+        assert "#b45309" in html, "Executive template must contain amber rule #b45309"
+
+    # --- switching changes the HTML -------------------------------------------
+
+    def test_switch_from_modern_to_classic_changes_html(self, monkeypatch):
+        data = self._generate_resume(monkeypatch, "modern")
+        resume_id, html_before = data["resume_id"], data["preview_html"]
+        switched = self._switch(resume_id, "classic")
+        assert switched["preview_html"] != html_before, \
+            "Switching modern→classic must produce different HTML"
+
+    def test_switch_classic_html_contains_serif_font(self, monkeypatch):
+        data = self._generate_resume(monkeypatch, "modern")
+        switched = self._switch(data["resume_id"], "classic")
+        assert "georgia" in switched["preview_html"].lower(), \
+            "After switching to classic the HTML must use Georgia font"
+
+    def test_switch_creative_html_contains_purple(self, monkeypatch):
+        data = self._generate_resume(monkeypatch, "modern")
+        switched = self._switch(data["resume_id"], "creative")
+        assert "#6b21a8" in switched["preview_html"].lower(), \
+            "After switching to creative the HTML must contain purple #6b21a8"
+
+    def test_switch_executive_html_contains_amber(self, monkeypatch):
+        data = self._generate_resume(monkeypatch, "modern")
+        switched = self._switch(data["resume_id"], "executive")
+        assert "#b45309" in switched["preview_html"].lower(), \
+            "After switching to executive the HTML must contain amber #b45309"
+
+    def test_switch_minimal_html_contains_gray_rule(self, monkeypatch):
+        data = self._generate_resume(monkeypatch, "modern")
+        switched = self._switch(data["resume_id"], "minimal")
+        assert "#d1d5db" in switched["preview_html"].lower(), \
+            "After switching to minimal the HTML must contain gray rule #d1d5db"
+
+    def test_all_five_templates_produce_different_html(self, monkeypatch):
+        """Each template must produce HTML that differs from every other template."""
+        data = self._generate_resume(monkeypatch, "modern")
+        resume_id = data["resume_id"]
+        previews = {}
+        for tid in ("modern", "classic", "creative", "minimal", "executive"):
+            switched = self._switch(resume_id, tid)
+            previews[tid] = switched["preview_html"]
+        # Every pair must differ
+        templates = list(previews.keys())
+        for i in range(len(templates)):
+            for j in range(i + 1, len(templates)):
+                a, b = templates[i], templates[j]
+                assert previews[a] != previews[b], \
+                    f"Templates '{a}' and '{b}' produced identical HTML"
+
+    # --- switching produces a new .docx file ----------------------------------
+
+    def test_switch_template_returns_new_docx_filename(self, monkeypatch):
+        data = self._generate_resume(monkeypatch, "modern")
+        original_filename = data["filename"]
+        switched = self._switch(data["resume_id"], "classic")
+        assert switched["filename"].endswith(".docx"), \
+            "Switch response must include a .docx filename"
+        assert switched["filename"] != original_filename, \
+            "Switching templates must create a new .docx file"
+
+    def test_new_docx_is_downloadable_after_switch(self, monkeypatch):
+        data = self._generate_resume(monkeypatch, "modern")
+        switched = self._switch(data["resume_id"], "classic")
+        new_filename = switched["filename"]
+        dl = client.get(f"/api/resumes/download-file/{new_filename}")
+        assert dl.status_code == 200, \
+            f"New .docx '{new_filename}' must be downloadable after template switch"
+        assert dl.headers["content-type"].startswith(
+            "application/vnd.openxmlformats"
+        ), "Downloaded file must have the correct Word MIME type"
+
+    # --- layout structural differences ----------------------------------------
+
+    def test_modern_and_classic_have_different_layouts(self, monkeypatch):
+        """Modern (sidebar B) and Classic (single-column A) must differ structurally."""
+        data = self._generate_resume(monkeypatch, "modern")
+        resume_id = data["resume_id"]
+        modern_html   = self._switch(resume_id, "modern")["preview_html"].lower()
+        classic_html  = self._switch(resume_id, "classic")["preview_html"].lower()
+        # Modern must have sidebar colours; classic must not
+        assert "#1a375e" in modern_html
+        assert "#1a375e" not in classic_html
+        # Classic must use Georgia; modern must not
+        assert "georgia" in classic_html
+        assert "georgia" not in modern_html
+
+    def test_creative_layout_differs_from_sidebar_layouts(self, monkeypatch):
+        """Creative (header-band C) must not share the sidebar colours of Modern/Executive."""
+        data = self._generate_resume(monkeypatch, "modern")
+        resume_id = data["resume_id"]
+        creative_html = self._switch(resume_id, "creative")["preview_html"].lower()
+        modern_html   = self._switch(resume_id, "modern")["preview_html"].lower()
+        # Creative has purple; modern does not
+        assert "#6b21a8" in creative_html
+        assert "#6b21a8" not in modern_html
+        # Modern has navy sidebar; creative does not
+        assert "#1a375e" in modern_html
+        assert "#1a375e" not in creative_html
