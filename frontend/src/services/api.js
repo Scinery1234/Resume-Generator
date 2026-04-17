@@ -162,10 +162,10 @@ export const resumeAPI = {
       
       const result = await response.json();
       console.log('✅ Generation successful:', result);
-      // Unwrap standardize_response envelope { status, data: {...} } if present,
-      // so callers always receive a flat object with filename/preview_html/resume_id
-      // at the top level.
-      return (result && result.status === 'success' && result.data) ? result.data : result;
+      // Return result directly — filename, preview_html, resume_id are always
+      // top-level keys in the generate response (standardize_response spreads
+      // fields flat, it does NOT nest them under a "data" key).
+      return result;
     } catch (error) {
       // Enhanced error handling
       console.error('❌ Generate error details:', {
@@ -251,9 +251,8 @@ export const resumeAPI = {
         'Content-Type': 'application/json',
       },
     });
-    const result = response.data;
-    // Unwrap standardize_response envelope if present
-    return (result && result.status === 'success' && result.data) ? result.data : result;
+    // Return result directly — preview_html, data, filename are top-level keys.
+    return response.data;
   },
   
   switchTemplate: async (resumeId, templateId, userId = null) => {
