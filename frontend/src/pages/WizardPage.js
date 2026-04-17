@@ -24,7 +24,7 @@ function fileIcon(filename) {
 const GUEST_MAX_EDITS = 3;
 const PAID_MAX_EDITS  = 50;
 
-function ResultView({ result, onReset, onUpdate }) {
+function ResultView({ result, onReset, onUpdate, activeTemplate, switchingTemplate, onSwitchTemplate }) {
     const [downloading, setDownloading] = useState(false);
     const [downloadError, setDownloadError] = useState('');
     const [editPrompt, setEditPrompt] = useState('');
@@ -33,8 +33,6 @@ function ResultView({ result, onReset, onUpdate }) {
     const [promptInfo, setPromptInfo] = useState(null);
     const [isEditingInline, setIsEditingInline] = useState(false);
     const [jsonText, setJsonText] = useState(() => JSON.stringify(result.data || {}, null, 2));
-    const [activeTemplate, setActiveTemplate] = useState(result.template || 'modern');
-    const [switchingTemplate, setSwitchingTemplate] = useState(false);
 
     const userId = localStorage.getItem('userId');
     const token  = localStorage.getItem('token');
@@ -127,23 +125,6 @@ function ResultView({ result, onReset, onUpdate }) {
         }
     };
 
-    const handleSwitchTemplate = async (templateId) => {
-        if (templateId === activeTemplate || switchingTemplate || !result.resume_id) return;
-        setSwitchingTemplate(true);
-        try {
-            const response = await resumeAPI.switchTemplate(
-                result.resume_id,
-                templateId,
-                isGuest ? null : userId,
-            );
-            setActiveTemplate(templateId);
-            if (onUpdate) onUpdate({ ...response, data: result.data });
-        } catch (err) {
-            setEditError(err.message || 'Failed to switch template.');
-        } finally {
-            setSwitchingTemplate(false);
-        }
-    };
 
     return (
         <div className="gen-result">
@@ -164,7 +145,7 @@ function ResultView({ result, onReset, onUpdate }) {
                             key={t.id}
                             type="button"
                             className={`gen-template-pill${activeTemplate === t.id ? ' gen-template-pill--active' : ''}`}
-                            onClick={() => handleSwitchTemplate(t.id)}
+                            onClick={() => onSwitchTemplate(t.id)}
                             disabled={switchingTemplate}
                             style={{ '--pill-color': t.preview.headingColor }}
                             aria-pressed={activeTemplate === t.id}
@@ -649,10 +630,12 @@ const WizardPage = () => {
     const [jobDesc, setJobDesc]         = useState('');
     const [additionalInfo, setAdditionalInfo] = useState('');
     const [template, setTemplate]       = useState('modern');
-    const [isDragging, setIsDragging]   = useState(false);
-    const [loading, setLoading]         = useState(false);
-    const [error, setError]             = useState('');
-    const [result, setResult]           = useState(null);
+    const [isDragging, setIsDragging]     = useState(false);
+    const [loading, setLoading]           = useState(false);
+    const [error, setError]               = useState('');
+    const [result, setResult]             = useState(null);
+    const [activeTemplate, setActiveTemplate]     = useState('modern');
+    const [switchingTemplate, setSwitchingTemplate] = useState(false);
 
     // ── File handling ────────────────────────────────────────────────────────
     const addFiles = useCallback((newFiles) => {
@@ -688,6 +671,7 @@ const WizardPage = () => {
         setError(''); // Clear previous errors
         try {
             const data = await resumeAPI.generate(files, jobDesc, additionalInfo, null, template);
+            setActiveTemplate(template);
             setResult({ ...data, template });
         } catch (err) {
             const msg = err.response?.data?.detail || 'Generation failed. Please try again.';
@@ -698,12 +682,34 @@ const WizardPage = () => {
         }
     };
 
+    // ── Template switching — lives in the parent so setResult is called directly
+    const handleSwitchTemplate = async (templateId) => {
+        if (!result || templateId === activeTemplate || switchingTemplate || !result.resume_id) return;
+        const userId = localStorage.getItem('userId');
+        const isGuest = !localStorage.getItem('token') || !userId;
+        setSwitchingTemplate(true);
+        try {
+            const response = await resumeAPI.switchTemplate(
+                result.resume_id,
+                templateId,
+                isGuest ? null : userId,
+            );
+            setActiveTemplate(templateId);
+            setResult(prev => ({
+                ...prev,
+                preview_html: response.preview_html,
+                filename:     response.filename,
+            }));
+        } catch (err) {
+            // Error is surfaced via setSwitchError which ResultView displays
+            console.error('Template switch failed:', err);
+        } finally {
+            setSwitchingTemplate(false);
+        }
+    };
+
     // ── Result screen ─────────────────────────────────────────────────────────
     if (result) {
-        // Use a functional state update (prev =>) so this callback always
-        // operates on the latest state even if React batches renders.
-        // Only overwrite fields that the server actually returned — preserves
-        // resume_id, filename, and template across edits and template switches.
         const handleResultUpdate = (updatedResult) => {
             setResult(prev => ({
                 ...prev,
@@ -713,7 +719,7 @@ const WizardPage = () => {
                 ...(updatedResult.prompt_count  !== undefined && { prompt_count:  updatedResult.prompt_count }),
             }));
         };
-        
+
         return (
             <div className="gen-page">
                 <nav className="gen-nav">
@@ -721,7 +727,14 @@ const WizardPage = () => {
                     <span className="gen-nav__logo">ResumeGen</span>
                     <span />
                 </nav>
-                <ResultView result={result} onReset={() => setResult(null)} onUpdate={handleResultUpdate} />
+                <ResultView
+                    result={result}
+                    onReset={() => setResult(null)}
+                    onUpdate={handleResultUpdate}
+                    activeTemplate={activeTemplate}
+                    switchingTemplate={switchingTemplate}
+                    onSwitchTemplate={handleSwitchTemplate}
+                />
             </div>
         );
     }
