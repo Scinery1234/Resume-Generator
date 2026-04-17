@@ -330,6 +330,23 @@ class TestGenerateWithTemplate:
         )
         assert resp.status_code == 200
 
+    def test_generate_accepts_template_name_alias(self, monkeypatch):
+        """Frontend payloads using names (e.g. 'Creative') should resolve to ids."""
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.choices[0].message.content = json.dumps(MOCK_RESUME_JSON)
+        mock_client.chat.completions.create.return_value = mock_resp
+        monkeypatch.setattr("main.openai_client", mock_client)
+
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer", "template": "Creative"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+        assert "#6b21a8" in resp.json()["preview_html"]
+
     def test_creative_template_preview_contains_purple(self, monkeypatch):
         mock_client = MagicMock()
         mock_resp = MagicMock()
@@ -788,6 +805,17 @@ class TestSwitchTemplate:
         )
         assert resp.status_code == 400
         assert "Unknown template" in resp.json()["detail"]
+
+    def test_switch_template_accepts_template_name_alias(self, monkeypatch):
+        resume_id = self._guest_resume_id(monkeypatch)
+        resp = client.post(
+            f"/api/resumes/{resume_id}/switch-template",
+            data={"template_id": "Creative"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["template_id"] == "creative"
+        assert "#6b21a8" in data["preview_html"].lower()
 
     def test_switch_template_nonexistent_resume_returns_404(self, monkeypatch):
         resp = client.post(
