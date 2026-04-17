@@ -347,6 +347,23 @@ class TestGenerateWithTemplate:
         assert resp.status_code == 200
         assert "#6b21a8" in resp.json()["preview_html"]
 
+    def test_generate_accepts_template_id_form_field(self, monkeypatch):
+        """Backward compatibility: accept template_id in multipart payload."""
+        mock_client = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.choices[0].message.content = json.dumps(MOCK_RESUME_JSON)
+        mock_client.chat.completions.create.return_value = mock_resp
+        monkeypatch.setattr("main.openai_client", mock_client)
+
+        txt = b"Jane Smith\nSoftware Engineer"
+        resp = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer", "template_id": "Creative"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert resp.status_code == 200
+        assert "#6b21a8" in resp.json()["preview_html"]
+
     def test_creative_template_preview_contains_purple(self, monkeypatch):
         mock_client = MagicMock()
         mock_resp = MagicMock()

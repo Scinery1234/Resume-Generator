@@ -346,6 +346,7 @@ async def generate_from_documents(
     job_description: str = Form(default=""),
     additional_info: str = Form(default=""),
     template: str = Form(default="modern"),
+    template_id: Optional[str] = Form(default=None),
     user_id: Optional[int] = Form(default=None),  # Optional user ID for logged-in users
     db: Session = Depends(get_db),
 ):
@@ -443,7 +444,7 @@ async def generate_from_documents(
     # Sanitize filename (though UUID should be safe, this is defensive)
     safe_filename = sanitize_filename(resume_filename)
     resume_path = RESUMES_DIR / safe_filename
-    resolved_template = resolve_template_id(template)
+    resolved_template = resolve_template_id(template_id or template)
     resume_builder.build_word_document(str(resume_path), resume_data, template_id=resolved_template)
 
     # Build the HTML preview
