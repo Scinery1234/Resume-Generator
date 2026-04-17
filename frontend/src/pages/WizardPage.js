@@ -233,6 +233,7 @@ function ResultView({ result, onReset, onUpdate }) {
                         </div>
                     ) : (
                         <iframe
+                            key={result.filename}
                             title="Resume Preview"
                             srcDoc={result.preview_html}
                             className="gen-preview-frame"
