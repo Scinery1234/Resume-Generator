@@ -105,6 +105,20 @@ seed_demo_user()
 # Security
 security = HTTPBearer()
 
+
+def resolve_template_id(template_id: Optional[str]) -> str:
+    """Return a known template id, accepting ids or names."""
+    normalized = (template_id or "modern").strip().lower()
+    template_lookup = {
+        t["id"].strip().lower(): t["id"]
+        for t in TEMPLATE_LIST
+    }
+    template_lookup.update({
+        t["name"].strip().lower(): t["id"]
+        for t in TEMPLATE_LIST
+    })
+    return template_lookup.get(normalized, "modern")
+
 # FastAPI app initialization
 app = FastAPI(
     title="Resume Generator API",
@@ -332,6 +346,7 @@ async def generate_from_documents(
     job_description: str = Form(default=""),
     additional_info: str = Form(default=""),
     template: str = Form(default="modern"),
+    template_id: Optional[str] = Form(default=None),
     user_id: Optional[int] = Form(default=None),  # Optional user ID for logged-in users
     db: Session = Depends(get_db),
 ):
@@ -429,10 +444,11 @@ async def generate_from_documents(
     # Sanitize filename (though UUID should be safe, this is defensive)
     safe_filename = sanitize_filename(resume_filename)
     resume_path = RESUMES_DIR / safe_filename
-    resume_builder.build_word_document(str(resume_path), resume_data, template_id=template)
+    resolved_template = resolve_template_id(template_id or template)
+    resume_builder.build_word_document(str(resume_path), resume_data, template_id=resolved_template)
 
     # Build the HTML preview
-    preview_html = resume_builder.build_html_preview(resume_data, template_id=template)
+    preview_html = resume_builder.build_html_preview(resume_data, template_id=resolved_template)
 
     # Always save the resume to the database (user_id=None for guests) so that
     # the resume_id can be used for AI-powered edits without requiring login.
@@ -445,7 +461,7 @@ async def generate_from_documents(
             contact_info=json.dumps(resume_data.get("contact", {})),
             resume_data=json.dumps(resume_data),
             preview_html=preview_html,
-            template_id=template,
+            template_id=resolved_template,
         )
         db.add(resume_record)
         db.commit()
@@ -887,9 +903,8 @@ async def switch_resume_template(
     if not resume.resume_data:
         raise HTTPException(status_code=400, detail="Resume data not available")
 
-    # Validate template_id
-    valid_template_ids = {t["id"] for t in TEMPLATE_LIST}
-    if template_id not in valid_template_ids:
+    resolved_template = resolve_template_id(template_id)
+    if resolved_template == "modern" and (template_id or "").strip().lower() != "modern":
         raise HTTPException(status_code=400, detail=f"Unknown template '{template_id}'")
 
     resume_data = json.loads(resume.resume_data)
@@ -897,12 +912,12 @@ async def switch_resume_template(
     resume_filename = f"resume_{uuid.uuid4().hex[:10]}.docx"
     safe_filename = sanitize_filename(resume_filename)
     resume_path = RESUMES_DIR / safe_filename
-    resume_builder.build_word_document(str(resume_path), resume_data, template_id=template_id)
-    preview_html = resume_builder.build_html_preview(resume_data, template_id=template_id)
+    resume_builder.build_word_document(str(resume_path), resume_data, template_id=resolved_template)
+    preview_html = resume_builder.build_html_preview(resume_data, template_id=resolved_template)
 
     resume.preview_html = preview_html
     resume.file_path = str(resume_path)
-    resume.template_id = template_id
+    resume.template_id = resolved_template
     resume.updated_at = datetime.utcnow()
     db.commit()
 
@@ -910,7 +925,7 @@ async def switch_resume_template(
         "status": "success",
         "preview_html": preview_html,
         "filename": safe_filename,
-        "template_id": template_id,
+        "template_id": resolved_template,
     }
 
 
