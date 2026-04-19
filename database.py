@@ -93,21 +93,26 @@ def init_db():
     Also runs lightweight ALTER TABLE migrations for columns added after the
     initial schema (SQLAlchemy's create_all does not modify existing tables).
     """
+    import logging
     from sqlalchemy import text, inspect as sa_inspect
 
-    Base.metadata.create_all(bind=engine)
+    logger = logging.getLogger(__name__)
+    try:
+        Base.metadata.create_all(bind=engine)
 
-    # Add guest_edit_count column to resumes if it was created before this
-    # column was introduced (zero-downtime migration).
-    with engine.connect() as conn:
-        inspector = sa_inspect(engine)
-        existing_cols = [c["name"] for c in inspector.get_columns("resumes")]
-        if "guest_edit_count" not in existing_cols:
-            conn.execute(text("ALTER TABLE resumes ADD COLUMN guest_edit_count INTEGER DEFAULT 0"))
-            conn.commit()
-        if "template_id" not in existing_cols:
-            conn.execute(text("ALTER TABLE resumes ADD COLUMN template_id VARCHAR DEFAULT 'modern'"))
-            conn.commit()
+        # Add guest_edit_count column to resumes if it was created before this
+        # column was introduced (zero-downtime migration).
+        with engine.connect() as conn:
+            inspector = sa_inspect(engine)
+            existing_cols = [c["name"] for c in inspector.get_columns("resumes")]
+            if "guest_edit_count" not in existing_cols:
+                conn.execute(text("ALTER TABLE resumes ADD COLUMN guest_edit_count INTEGER DEFAULT 0"))
+                conn.commit()
+            if "template_id" not in existing_cols:
+                conn.execute(text("ALTER TABLE resumes ADD COLUMN template_id VARCHAR DEFAULT 'modern'"))
+                conn.commit()
+    except Exception as e:
+        logger.warning(f"init_db failed (will retry on first request): {e}")
 
 
 def get_db():
