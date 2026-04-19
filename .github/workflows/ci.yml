@@ -25,6 +25,9 @@ jobs:
     name: 'Backend Tests (pytest)'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Setup Python environment
         uses: ./.github/actions/setup-python-env
         with:
@@ -70,6 +73,9 @@ jobs:
     name: 'Frontend Tests (Jest)'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Setup Node environment
         uses: ./.github/actions/setup-node-env
         with:
