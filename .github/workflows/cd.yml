@@ -50,6 +50,9 @@ jobs:
       image-tag: ${{ steps.meta.outputs.image-tag }}
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Setup Python environment
         uses: ./.github/actions/setup-python-env
 
@@ -140,6 +143,9 @@ jobs:
     environment: production
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Setup Node environment
         uses: ./.github/actions/setup-node-env
 
