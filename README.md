@@ -362,3 +362,4 @@ Resume-Generator/
    - `REACT_APP_API_URL` — your Render backend URL (e.g. `https://your-api.onrender.com`)
 
 See `VERCEL_DEPLOYMENT.md` for a detailed step-by-step guide.
+
