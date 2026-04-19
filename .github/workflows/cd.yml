@@ -1,0 +1,259 @@
+name: CD - Build & Deploy to AWS
+
+on:
+  workflow_run:
+    workflows: ['CI - Test & Validate']
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      skip_frontend:
+        description: 'Deploy backend only'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+jobs:
+  gate:
+    name: 'Deployment Gate'
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    outputs:
+      proceed: ${{ steps.decision.outputs.proceed }}
+    steps:
+      - name: Evaluate deployment conditions
+        id: decision
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual deployment by ${{ github.actor }}"
+            echo "proceed=true" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.workflow_run.conclusion }}" = "success" ]; then
+            echo "CI passed - proceeding"
+            echo "proceed=true" >> $GITHUB_OUTPUT
+          else
+            echo "CI did not pass - blocking deployment"
+            echo "proceed=false" >> $GITHUB_OUTPUT
+          fi
+
+  deploy-backend:
+    name: 'Deploy Backend to ECR and App Runner'
+    runs-on: ubuntu-latest
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    environment: production
+    outputs:
+      image-tag: ${{ steps.meta.outputs.image-tag }}
+
+    steps:
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python-env
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Authenticate to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and tag Docker image
+        id: meta
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          FULL_IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY"
+          docker build --platform linux/amd64 \
+            --tag "$FULL_IMAGE:$IMAGE_TAG" \
+            --tag "$FULL_IMAGE:latest" \
+            --label "git.sha=${{ github.sha }}" \
+            --label "deploy.actor=${{ github.actor }}" \
+            .
+          echo "image-tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "Built $FULL_IMAGE:$IMAGE_TAG"
+
+      - name: Push to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          FULL_IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY"
+          docker push "$FULL_IMAGE:$IMAGE_TAG"
+          docker push "$FULL_IMAGE:latest"
+          echo "Pushed :$IMAGE_TAG and :latest"
+
+      - name: Deploy to App Runner
+        env:
+          APP_RUNNER_SERVICE_ARN: ${{ secrets.APP_RUNNER_SERVICE_ARN }}
+        run: |
+          aws apprunner start-deployment \
+            --service-arn "$APP_RUNNER_SERVICE_ARN"
+          echo "App Runner deployment started"
+          for i in $(seq 1 20); do
+            STATUS=$(aws apprunner describe-service \
+              --service-arn "$APP_RUNNER_SERVICE_ARN" \
+              --query 'Service.Status' --output text)
+            echo "[$i/20] Status: $STATUS"
+            [ "$STATUS" = "RUNNING" ] && echo "Deployment successful" && break
+            [ "$STATUS" = "OPERATION_IN_PROGRESS" ] && sleep 30 || exit 1
+          done
+
+      - name: Write deployment log
+        if: always()
+        run: |
+          mkdir -p deploy-logs
+          cat > deploy-logs/backend-deployment.md << LOGEOF
+          # Backend Deployment
+          | Field | Value |
+          |---|---|
+          | Date | $(date -u) |
+          | Commit | ${{ github.sha }} |
+          | Actor | ${{ github.actor }} |
+          | Status | ${{ job.status }} |
+          LOGEOF
+
+      - name: Upload deployment log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-deploy-${{ github.run_id }}
+          path: deploy-logs/
+          retention-days: 90
+
+  deploy-frontend:
+    name: 'Deploy Frontend to S3 and CloudFront'
+    runs-on: ubuntu-latest
+    needs: [gate, deploy-backend]
+    if: |
+      needs.gate.outputs.proceed == 'true' &&
+      github.event.inputs.skip_frontend != 'true'
+    environment: production
+
+    steps:
+      - name: Setup Node environment
+        uses: ./.github/actions/setup-node-env
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Build React application
+        env:
+          REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
+          NODE_ENV: production
+          CI: 'false'
+        working-directory: frontend
+        run: |
+          npm run build
+          echo "React build complete"
+
+      - name: Sync to S3
+        env:
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+        working-directory: frontend
+        run: |
+          aws s3 sync build/ "s3://$S3_BUCKET" --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "index.html" --exclude "*.json"
+          aws s3 sync build/ "s3://$S3_BUCKET" \
+            --cache-control "no-cache, no-store, must-revalidate" \
+            --include "index.html" --include "*.json"
+          echo "Synced to S3"
+
+      - name: Invalidate CloudFront
+        env:
+          CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+        run: |
+          ID=$(aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "/*" --query 'Invalidation.Id' --output text)
+          echo "Invalidation: $ID"
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" --id "$ID"
+          echo "CloudFront cache cleared"
+
+      - name: Write deployment log
+        if: always()
+        run: |
+          mkdir -p deploy-logs
+          cat > deploy-logs/frontend-deployment.md << LOGEOF
+          # Frontend Deployment
+          | Field | Value |
+          |---|---|
+          | Date | $(date -u) |
+          | Commit | ${{ github.sha }} |
+          | Actor | ${{ github.actor }} |
+          | Status | ${{ job.status }} |
+          LOGEOF
+
+      - name: Upload deployment log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-deploy-${{ github.run_id }}
+          path: deploy-logs/
+          retention-days: 90
+
+  record-deployment:
+    name: 'Record Deployment'
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate deployment record
+        run: |
+          mkdir -p deployment-record
+          cat > deployment-record/deployment.json << JSONEOF
+          {
+            "deployment_id": "${{ github.sha }}-run${{ github.run_id }}",
+            "commit_sha": "${{ github.sha }}",
+            "run_id": "${{ github.run_id }}",
+            "actor": "${{ github.actor }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "backend_status": "${{ needs.deploy-backend.result }}",
+            "frontend_status": "${{ needs.deploy-frontend.result }}",
+            "environment": "production"
+          }
+          JSONEOF
+
+      - name: Upload deployment record
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-record-${{ github.sha }}
+          path: deployment-record/
+          retention-days: 365
+
+      - name: Export CD workflow as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-definition-cd-${{ github.run_id }}
+          path: .github/workflows/cd.yml
+          retention-days: 90
+        continue-on-error: true
+
+      - name: Post summary
+        run: |
+          {
+            echo "## Deployment Summary"
+            echo "| Component | Status |"
+            echo "|---|---|"
+            echo "| Backend | ${{ needs.deploy-backend.result }} |"
+            echo "| Frontend | ${{ needs.deploy-frontend.result }} |"
+            echo "**Commit:** \`${{ github.sha }}\`"
+          } >> $GITHUB_STEP_SUMMARY

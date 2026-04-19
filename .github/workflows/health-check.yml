@@ -1,0 +1,92 @@
+name: Scheduled Health Check
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      verbose:
+        description: 'Enable extended diagnostics'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  health-check:
+    name: 'Production Health Check'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check backend API
+        id: backend
+        env:
+          BACKEND_URL: ${{ secrets.REACT_APP_API_URL }}
+        run: |
+          HTTP_CODE=$(curl --silent --max-time 30 \
+            --write-out "%{http_code}" --output /tmp/backend.json \
+            "$BACKEND_URL/health" || echo "000")
+          echo "http-code=$HTTP_CODE" >> $GITHUB_OUTPUT
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "status=healthy" >> $GITHUB_OUTPUT
+            echo "Backend healthy"
+          else
+            echo "status=unhealthy ($HTTP_CODE)" >> $GITHUB_OUTPUT
+            echo "Backend returned $HTTP_CODE"
+            exit 1
+          fi
+
+      - name: Check frontend
+        id: frontend
+        run: |
+          HTTP_CODE=$(curl --silent --max-time 30 \
+            --write-out "%{http_code}" --output /dev/null \
+            "https://d15qp9ffjs24sd.cloudfront.net" || echo "000")
+          echo "http-code=$HTTP_CODE" >> $GITHUB_OUTPUT
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "status=healthy" >> $GITHUB_OUTPUT
+            echo "Frontend healthy"
+          else
+            echo "status=unhealthy ($HTTP_CODE)" >> $GITHUB_OUTPUT
+            echo "Frontend returned $HTTP_CODE"
+            exit 1
+          fi
+
+      - name: Write health report
+        if: always()
+        run: |
+          mkdir -p health-reports
+          cat > health-reports/health-$(date -u +%Y%m%d-%H%M).md << REPORTEOF
+          # Health Check - $(date -u '+%Y-%m-%d %H:%M UTC')
+          | Service | Status | HTTP |
+          |---|---|---|
+          | Backend | ${{ steps.backend.outputs.status }} | ${{ steps.backend.outputs.http-code }} |
+          | Frontend | ${{ steps.frontend.outputs.status }} | ${{ steps.frontend.outputs.http-code }} |
+          | Trigger | ${{ github.event_name }} | - |
+          REPORTEOF
+
+      - name: Upload health report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: health-report-${{ github.run_id }}
+          path: health-reports/
+          retention-days: 30
+
+      - name: Export workflow as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workflow-definition-health-${{ github.run_id }}
+          path: .github/workflows/health-check.yml
+          retention-days: 30
+        continue-on-error: true
+
+      - name: Post summary
+        if: always()
+        run: |
+          {
+            echo "## Health Check - $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo "| Service | Status | HTTP |"
+            echo "|---|---|---|"
+            echo "| Backend | ${{ steps.backend.outputs.status }} | ${{ steps.backend.outputs.http-code }} |"
+            echo "| Frontend | ${{ steps.frontend.outputs.status }} | ${{ steps.frontend.outputs.http-code }} |"
+          } >> $GITHUB_STEP_SUMMARY
