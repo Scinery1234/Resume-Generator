@@ -33,6 +33,7 @@ function ResultView({ result, onReset, onUpdate, activeTemplate, switchingTempla
     const [promptInfo, setPromptInfo] = useState(null);
     const [isEditingInline, setIsEditingInline] = useState(false);
     const [jsonText, setJsonText] = useState(() => JSON.stringify(result.data || {}, null, 2));
+    const [templateError, setTemplateError] = useState('');
 
     const userId = localStorage.getItem('userId');
     const token  = localStorage.getItem('token');
@@ -125,6 +126,15 @@ function ResultView({ result, onReset, onUpdate, activeTemplate, switchingTempla
         }
     };
 
+    const handleTemplateSwitchClick = async (templateId) => {
+        setTemplateError('');
+        try {
+            await onSwitchTemplate(templateId);
+        } catch (err) {
+            setTemplateError(err?.message || 'Failed to apply template. Please try again.');
+        }
+    };
+
 
     return (
         <div className="gen-result">
@@ -145,7 +155,7 @@ function ResultView({ result, onReset, onUpdate, activeTemplate, switchingTempla
                             key={t.id}
                             type="button"
                             className={`gen-template-pill${activeTemplate === t.id ? ' gen-template-pill--active' : ''}`}
-                            onClick={() => onSwitchTemplate(t.id)}
+                            onClick={() => handleTemplateSwitchClick(t.id)}
                             disabled={switchingTemplate}
                             style={{ '--pill-color': t.preview.headingColor }}
                             aria-pressed={activeTemplate === t.id}
@@ -160,6 +170,7 @@ function ResultView({ result, onReset, onUpdate, activeTemplate, switchingTempla
                     )}
                 </div>
             )}
+            {templateError && <div className="gen-error" role="alert">{templateError}</div>}
 
             {/* Edit-quota banner */}
             {promptInfo && (
@@ -702,8 +713,8 @@ const WizardPage = () => {
                 filename:     response.filename,
             }));
         } catch (err) {
-            // Error is surfaced via setSwitchError which ResultView displays
             console.error('Template switch failed:', err);
+            throw err;
         } finally {
             setSwitchingTemplate(false);
         }
