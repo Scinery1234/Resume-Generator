@@ -109,3 +109,17 @@ describe('AuthPage – Sign Up mode', () => {
         );
     });
 });
+
+describe('AuthPage – Guest mode', () => {
+    test('clears existing auth and navigates to wizard', async () => {
+        localStorage.setItem('token', 'stale-token');
+        localStorage.setItem('userId', '42');
+        renderAuth();
+
+        fireEvent.click(screen.getByRole('button', { name: /continue as guest/i }));
+
+        expect(localStorage.getItem('token')).toBeNull();
+        expect(localStorage.getItem('userId')).toBeNull();
+        expect(mockNavigate).toHaveBeenCalledWith('/wizard');
+    });
+});
