@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from database import get_db, init_db
 from models import User, Resume
 from doc_builder import ResumeBuilder, TEMPLATE_LIST, DUMMY_CANDIDATE
-from prompts import SYSTEM_PROMPT_DRAFT, SYSTEM_PROMPT_GENERATE, create_resume_prompt, build_generate_prompt
+from prompts import SYSTEM_PROMPT_DRAFT, SYSTEM_PROMPT_GENERATE, SYSTEM_PROMPT_EDIT, create_resume_prompt, build_generate_prompt
 from utils import (
     sanitize_filename, validate_file_extension, get_max_prompts_for_tier,
     handle_database_error, standardize_response, validate_user_id,
@@ -774,7 +774,7 @@ Return ONLY the updated JSON object — no other text."""
         response = openai_client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT_GENERATE},
+                {"role": "system", "content": SYSTEM_PROMPT_EDIT},
                 {"role": "user", "content": edit_prompt},
             ],
             temperature=0.3,

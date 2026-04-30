@@ -682,7 +682,10 @@ const WizardPage = () => {
         setLoading(true);
         setError(''); // Clear previous errors
         try {
-            const data = await resumeAPI.generate(files, jobDesc, additionalInfo, null, template);
+            const savedToken = localStorage.getItem('token');
+            const savedUserId = localStorage.getItem('userId');
+            const activeUserId = (savedToken && savedUserId) ? parseInt(savedUserId, 10) : null;
+            const data = await resumeAPI.generate(files, jobDesc, additionalInfo, activeUserId, template);
             setActiveTemplate(template);
             setResult({ ...data, template });
         } catch (err) {
