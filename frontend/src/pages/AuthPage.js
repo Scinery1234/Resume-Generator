@@ -96,7 +96,14 @@ const AuthPage = () => {
                 <button
                     type="button"
                     className="guest-btn"
-                    onClick={() => navigate('/wizard')}
+                    onClick={() => {
+                        // Ensure guest mode is truly unauthenticated even if an old
+                        // signed-in session still exists in localStorage.
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('userId');
+                        window.dispatchEvent(new Event('storage'));
+                        navigate('/wizard');
+                    }}
                 >
                     Continue as Guest — no account needed
                 </button>
