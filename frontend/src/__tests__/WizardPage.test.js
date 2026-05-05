@@ -109,6 +109,32 @@ describe('Job description textarea', () => {
     });
 });
 
+// ── Template selection flow ───────────────────────────────────────────────────
+
+describe('Template selection', () => {
+    test('sends selected template to generate API', async () => {
+        resumeAPI.generate.mockResolvedValueOnce(MOCK_RESULT);
+        renderPage();
+
+        const fileInput = document.querySelector('input[type="file"]');
+        const file = new File(['Jane Smith\nSoftware Engineer'], 'resume.txt', { type: 'text/plain' });
+        await userEvent.upload(fileInput, file);
+
+        await userEvent.type(
+            screen.getByPlaceholderText(/paste the full job description/i),
+            'Backend engineer role'
+        );
+
+        // Simulate a quick user action: pick template and generate immediately.
+        fireEvent.click(screen.getByRole('button', { name: /creative/i }));
+        fireEvent.click(screen.getByRole('button', { name: /generate my resume/i }));
+
+        await waitFor(() => expect(resumeAPI.generate).toHaveBeenCalled());
+        const lastCallArgs = resumeAPI.generate.mock.calls.at(-1);
+        expect(lastCallArgs[4]).toBe('creative');
+    });
+});
+
 // ── Result screen ─────────────────────────────────────────────────────────────
 
 describe('Result screen', () => {
