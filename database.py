@@ -121,10 +121,11 @@ def get_db():
     db = SessionLocal()
     try:
         db.execute(text("SELECT 1"))
-        yield db
     except Exception:
+        # Connection check failed — close the broken session and open a fresh one.
         db.close()
         db = SessionLocal()
+    try:
         yield db
     finally:
         db.close()
