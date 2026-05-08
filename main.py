@@ -434,26 +434,20 @@ async def generate_from_documents(
     # Build the HTML preview
     preview_html = resume_builder.build_html_preview(resume_data, template_id=template)
 
-    # Always save the resume to the database (user_id=None for guests) so that
-    # the resume_id can be used for AI-powered edits without requiring login.
-    resume_id = None
-    try:
-        resume_record = Resume(
-            user_id=user_id,  # NULL for guest resumes
-            name=resume_data.get("name", "Untitled Resume"),
-            file_path=str(resume_path),
-            contact_info=json.dumps(resume_data.get("contact", {})),
-            resume_data=json.dumps(resume_data),
-            preview_html=preview_html,
-            template_id=template,
-        )
-        db.add(resume_record)
-        db.commit()
-        db.refresh(resume_record)
-        resume_id = resume_record.id
-    except Exception as e:
-        logger.error(f"Error saving resume to database: {e}")
-        db.rollback()
+    # Save the resume — resume_id is required for template switching and edits.
+    resume_record = Resume(
+        user_id=user_id,  # NULL for guest resumes
+        name=resume_data.get("name", "Untitled Resume"),
+        file_path=str(resume_path),
+        contact_info=json.dumps(resume_data.get("contact", {})),
+        resume_data=json.dumps(resume_data),
+        preview_html=preview_html,
+        template_id=template,
+    )
+    db.add(resume_record)
+    db.commit()
+    db.refresh(resume_record)
+    resume_id = resume_record.id
 
     logger.info("Resume generated: %s (name: %s)", safe_filename, resume_data.get("name", "unknown"))
     # Return a flat response — NOT wrapped in standardize_response — so the
