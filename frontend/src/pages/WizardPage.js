@@ -696,7 +696,11 @@ const WizardPage = () => {
 
     // ── Template switching — lives in the parent so setResult is called directly
     const handleSwitchTemplate = async (templateId) => {
-        if (!result || templateId === activeTemplate || switchingTemplate || !result.resume_id) return;
+        if (!result || switchingTemplate) return;
+        if (templateId === activeTemplate) return;
+        if (!result.resume_id) {
+            throw new Error('Template switching is unavailable — please regenerate your resume.');
+        }
         const userId = localStorage.getItem('userId');
         const isGuest = !localStorage.getItem('token') || !userId;
         setSwitchingTemplate(true);
