@@ -601,25 +601,40 @@ async def get_user_resumes(user_id: Optional[int] = None, db: Session = Depends(
 
 @app.get("/api/resumes/{resume_id}/download", tags=["Resume Management"])
 async def download_resume(resume_id: int, db: Session = Depends(get_db)):
-    """Download a resume file"""
+    """Download a resume as a .docx, generated on-demand from the stored data.
+
+    Generates the document in memory each time so the correct template is
+    always applied — no dependency on ephemeral container filesystem files.
+    """
+    from fastapi.responses import StreamingResponse as _SR
     try:
         resume = db.query(Resume).filter(Resume.id == resume_id).first()
         if not resume:
             raise HTTPException(status_code=404, detail="Resume not found")
-        
-        if not resume.file_path or not Path(resume.file_path).exists():
-            raise HTTPException(status_code=404, detail="Resume file not found")
-        
-        return FileResponse(
-            resume.file_path,
+        if not resume.resume_data:
+            raise HTTPException(status_code=400, detail="Resume data not available for download")
+
+        resume_data  = json.loads(resume.resume_data)
+        template_id  = resume.template_id or "modern"
+
+        builder    = ResumeBuilder()
+        docx_bytes = builder.build_word_document_bytes(resume_data, template_id)
+
+        safe_name = sanitize_filename(
+            resume_data.get("name", "resume").replace(" ", "_")
+        )
+        filename = f"{safe_name}_{template_id}.docx"
+
+        return _SR(
+            io.BytesIO(docx_bytes),
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            filename=f"{resume.name}_resume.docx"
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error downloading resume: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error downloading resume: {str(e)}")
+        logger.error(f"Error generating resume for download: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating resume: {str(e)}")
 
 @app.get("/api/resumes/download-file/{filename}", tags=["Resume Management"])
 async def download_resume_by_filename(filename: str):
