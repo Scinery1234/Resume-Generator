@@ -1709,6 +1709,37 @@ class ResumeBuilder:
         logger.info(f'Resume saved → {output_path}  (template: {template_id}, layout: {layout})')
         return output_path
 
+    # ── In-memory Word document builder ─────────────────────────────────────
+    def build_word_document_bytes(self, candidate_data: Dict,
+                                  template_id: str = "modern") -> bytes:
+        """Build a .docx and return its raw bytes (no filesystem required).
+
+        Identical logic to build_word_document but streams into a BytesIO
+        buffer instead of writing to disk — safe for ephemeral containers.
+        """
+        import io as _io
+        candidate_data = _normalize_resume_data(candidate_data)
+        tmpl   = _get_template(template_id)
+        layout = tmpl.get("layout", "A")
+
+        doc = Document()
+        normal = doc.styles['Normal']
+        normal.font.name = tmpl["body_font"]
+        normal.font.size = tmpl["body_size"]
+
+        if layout == "B":
+            _build_word_layout_b(doc, candidate_data, tmpl)
+        elif layout == "C":
+            _build_word_layout_c(doc, candidate_data, tmpl)
+        else:
+            _build_word_layout_a(doc, candidate_data, tmpl)
+
+        buf = _io.BytesIO()
+        doc.save(buf)
+        buf.seek(0)
+        logger.info(f'Resume built in memory  (template: {template_id}, layout: {layout})')
+        return buf.getvalue()
+
     # ── HTML preview builder ─────────────────────────────────────────────────
     def build_html_preview(self, candidate_data: Dict,
                            template_id: str = "modern") -> str:

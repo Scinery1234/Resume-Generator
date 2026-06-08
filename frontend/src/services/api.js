@@ -208,10 +208,16 @@ export const resumeAPI = {
   },
   
   download: async (resumeId) => {
-    const response = await api.get(`/api/resumes/${resumeId}/download`, {
-      responseType: 'blob',
+    const response = await fetch(`${API_BASE_URL}/api/resumes/${resumeId}/download`, {
+      method: 'GET',
+      mode: 'cors',
+      credentials: 'omit',
     });
-    return response.data;
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+      throw new Error(error.detail || `Download failed: ${response.status}`);
+    }
+    return await response.blob();
   },
 
   downloadByFilename: async (filename) => {

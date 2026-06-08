@@ -63,8 +63,12 @@ function ResultView({ result, onReset, onUpdate, activeTemplate, switchingTempla
         setDownloading(true);
         setDownloadError('');
         try {
-            const blob = await resumeAPI.downloadByFilename(result.filename);
-            downloadBlob(blob, result.filename);
+            if (!result.resume_id) {
+                throw new Error('Resume ID missing — please regenerate your resume.');
+            }
+            const blob = await resumeAPI.download(result.resume_id);
+            const safeName = (result.data?.name || 'resume').replace(/\s+/g, '_');
+            downloadBlob(blob, `${safeName}_${activeTemplate}.docx`);
         } catch (err) {
             setDownloadError(err.message || 'Download failed. Please try again.');
         } finally {
