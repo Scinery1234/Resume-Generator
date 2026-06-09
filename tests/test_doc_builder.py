@@ -485,12 +485,13 @@ class TestBuildWordDocumentWithTemplates:
         assert "Senior Software Engineer" in main_text
 
     def test_layout_c_name_is_in_first_paragraph(self, builder, tmp_path):
-        """Creative (Layout C) renders the name in the first paragraph (shaded header)."""
+        """Creative (Layout C) renders the name inside the full-width header table cell."""
         path = str(tmp_path / "creative.docx")
         builder.build_word_document(path, FULL_CANDIDATE, template_id="creative")
         doc = Document(path)
-        # First paragraph holds the shaded name
-        assert "JANE SMITH" in doc.paragraphs[0].text
+        # Name is in the first table cell (full-width header band, not a top-level paragraph)
+        header_text = " ".join(p.text for p in doc.tables[0].cell(0, 0).paragraphs)
+        assert "JANE SMITH" in header_text
 
 
 # ── Per-template HTML tests ───────────────────────────────────────────────────
