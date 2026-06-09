@@ -1010,10 +1010,19 @@ def _build_word_layout_b(doc: Document, candidate_data: Dict, tmpl: Dict):
 
 def _build_word_layout_c(doc: Document, candidate_data: Dict, tmpl: Dict):
     """
-    Build the header-band layout (Layout C).
-    A shaded header at the top (name + contact on coloured background) is
-    followed by the standard single-column body sections.
+    Layout C – full-width purple header band + single-column body.
+
+    The header is a borderless table that spans the full page width.  To
+    achieve a true bleed-to-edge effect we use a continuous section break:
+      • Section 1 (zero margins)  → contains the header table
+      • Section 2 (2.2 cm margins) → contains all body paragraphs
+
+    The body section properties are set on the document body-level sectPr
+    (via _set_doc_margins).  The section 1 properties are stored in the break
+    paragraph's pPr/sectPr (Word reads that as "end of section 1 here").
     """
+    # Section 2 (body) gets standard margins.  _set_doc_margins writes to the
+    # body-level sectPr, which Word treats as the LAST section.
     _set_doc_margins(doc)
 
     contact: Dict = candidate_data.get('contact', {})
@@ -1023,32 +1032,70 @@ def _build_word_layout_c(doc: Document, candidate_data: Dict, tmpl: Dict):
     if contact.get('location'): contact_parts.append(contact['location'])
     if contact.get('linkedin'): contact_parts.append(contact['linkedin'])
 
-    header_hex  = tmpl["docx_header_bg_hex"]
-    header_rgb  = tmpl["docx_header_text_rgb"]
+    header_hex = tmpl["docx_header_bg_hex"]
+    header_rgb = tmpl["docx_header_text_rgb"]
+    _PAD_L = 2.2   # horizontal padding inside the header cell (cm)
+    _PAD_R = 2.2
 
-    # ── Name (shaded) ────────────────────────────────────────────────────────
-    name_para = doc.add_paragraph()
-    _set_para_spacing(name_para, before=14, after=2)
-    _set_paragraph_shading(name_para, header_hex)
-    nr = name_para.add_run(candidate_data.get('name', '').strip().upper())
-    nr.font.name      = tmpl["heading_font"]
-    nr.font.size      = tmpl["name_size"]
-    nr.font.bold      = True
-    nr.font.color.rgb = header_rgb
+    # ── Full-width header table (section 1, zero margins) ────────────────────
+    hdr_table = doc.add_table(rows=1, cols=1)
+    _clear_table_borders(hdr_table)
+    _set_table_width(hdr_table, 21.0)
+    hdr_cell = hdr_table.cell(0, 0)
+    _set_cell_width(hdr_cell, 21.0)
+    _add_cell_shading(hdr_cell, header_hex)
 
-    # ── Contact (shaded) ─────────────────────────────────────────────────────
-    contact_para = doc.add_paragraph()
-    _set_para_spacing(contact_para, before=0, after=14)
-    _set_paragraph_shading(contact_para, header_hex)
-    cr = contact_para.add_run('  ·  '.join(contact_parts))
-    cr.font.name      = tmpl["body_font"]
-    cr.font.size      = tmpl["contact_size"]
-    cr.font.color.rgb = header_rgb
+    # Name
+    hnp = hdr_cell.paragraphs[0]
+    _set_para_spacing(hnp, before=28, after=4)
+    _set_para_indent(hnp, _PAD_L, _PAD_R)
+    hnr = hnp.add_run(candidate_data.get('name', '').strip().upper())
+    hnr.font.name      = tmpl["heading_font"]
+    hnr.font.size      = tmpl["name_size"]
+    hnr.font.bold      = True
+    hnr.font.color.rgb = header_rgb
 
-    # Rule separating header from body
-    _add_horizontal_rule(doc, tmpl["rule_color"])
+    # Contact
+    hcp = hdr_cell.add_paragraph()
+    _set_para_spacing(hcp, before=0, after=22)
+    _set_para_indent(hcp, _PAD_L, _PAD_R)
+    hcr = hcp.add_run('  ·  '.join(contact_parts))
+    hcr.font.name      = tmpl["body_font"]
+    hcr.font.size      = tmpl["contact_size"]
+    hcr.font.color.rgb = header_rgb
 
-    # ── Body (same as Layout A) ───────────────────────────────────────────────
+    # ── Continuous section break ─────────────────────────────────────────────
+    # This invisible paragraph ends section 1 (zero margins) so that the body
+    # paragraphs below it fall into section 2 (standard 2.2 cm margins).
+    brk = doc.add_paragraph()
+    _set_para_spacing(brk, before=0, after=0)
+    brk_pPr = brk._p.get_or_add_pPr()
+    # Paragraph-mark rPr: 1 pt font so the line takes up no visual space.
+    rPr = OxmlElement('w:rPr')
+    sz  = OxmlElement('w:sz')
+    sz.set(qn('w:val'), '2')
+    rPr.append(sz)
+    brk_pPr.append(rPr)
+    # sectPr in pPr → defines section 1 properties (zero margins, continuous).
+    sectPr = OxmlElement('w:sectPr')
+    sectType = OxmlElement('w:type')
+    sectType.set(qn('w:val'), 'continuous')
+    sectPr.append(sectType)
+    twips_w = str(int(round(21.0 / 2.54 * 1440)))   # 11906
+    twips_h = str(int(round(29.7 / 2.54 * 1440)))   # 16838
+    pgSz = OxmlElement('w:pgSz')
+    pgSz.set(qn('w:w'), twips_w)
+    pgSz.set(qn('w:h'), twips_h)
+    sectPr.append(pgSz)
+    pgMar = OxmlElement('w:pgMar')
+    for attr, val in [('top', '0'), ('bottom', '0'), ('left', '0'),
+                      ('right', '0'), ('header', '0'), ('footer', '0'),
+                      ('gutter', '0')]:
+        pgMar.set(qn(f'w:{attr}'), val)
+    sectPr.append(pgMar)
+    brk_pPr.append(sectPr)
+
+    # ── Body sections (section 2 – standard 2.2 cm margins) ──────────────────
     _add_body_sections_a(doc, candidate_data, tmpl)
 
 
@@ -1247,8 +1294,10 @@ def _build_html_layout_a(candidate_data: Dict, tmpl: Dict) -> str:
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="color-scheme" content="light"/>
 <title>Resume Preview</title>
 <style>
+  :root {{ color-scheme: light; }}
   *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{
     font-family: {font_family};
@@ -1454,8 +1503,10 @@ def _build_html_layout_b(candidate_data: Dict, tmpl: Dict) -> str:
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="color-scheme" content="light"/>
 <title>Resume Preview</title>
 <style>
+  :root {{ color-scheme: light; }}
   *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{
     font-family: {font_family};
@@ -1587,8 +1638,10 @@ def _build_html_layout_c(candidate_data: Dict, tmpl: Dict) -> str:
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="color-scheme" content="light"/>
 <title>Resume Preview</title>
 <style>
+  :root {{ color-scheme: light; }}
   *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{
     font-family: {font_family};
