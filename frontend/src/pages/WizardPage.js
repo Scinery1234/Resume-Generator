@@ -146,7 +146,12 @@ function ResultView({ result, onReset, onUpdate, activeTemplate, switchingTempla
                 <span className="gen-result__tick">✓</span>
                 <div>
                     <h2>Your resume is ready!</h2>
-                    <p>AI-generated and tailored to your job description. Download your .docx below.</p>
+                    <p>
+                        {result.generation_mode === 'customisation'
+                            ? 'Tailored to your job description using AI.'
+                            : 'Generated from your documents (no job description provided).'}
+                        {' '}Download your .docx below.
+                    </p>
                 </div>
             </div>
 
