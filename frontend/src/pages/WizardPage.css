@@ -40,7 +40,7 @@
 /* ── Hero ────────────────────────────────────────────────────────────────── */
 .gen-hero {
     text-align: center;
-    padding: 30px 24px 16px;
+    padding: 24px 24px 10px;
 }
 .gen-hero h1 {
     font-size: 2rem;
@@ -724,4 +724,28 @@
     font-size: 0.8rem;
     font-weight: 700;
     color: var(--card-accent, #0369a1);
+}
+
+/* ── Generation mode badge ───────────────────────────────────────────────── */
+.gen-mode-badge {
+    display: inline-block;
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #fff;
+    margin-right: 4px;
+    vertical-align: middle;
+}
+
+/* ── Mobile sticky download bar ─────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .gen-result__actions {
+        position: sticky;
+        bottom: 0;
+        background: #fff;
+        border-top: 1px solid #e2e8f0;
+        padding: 12px 16px;
+        z-index: 10;
+    }
 }

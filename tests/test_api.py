@@ -309,7 +309,7 @@ class TestTemplates:
         assert resp.status_code == 200
         for tid, html_str in resp.json().items():
             assert "<!DOCTYPE html>" in html_str, f"{tid} preview missing DOCTYPE"
-            assert "ALEX JOHNSON" in html_str, f"{tid} preview missing dummy candidate name"
+            assert "ALEX JOHNSON" in html_str.upper(), f"{tid} preview missing dummy candidate name"
 
     def test_template_previews_executive_has_amber_rule(self):
         resp = client.get("/api/templates/previews")

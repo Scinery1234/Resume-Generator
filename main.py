@@ -396,7 +396,13 @@ async def generate_from_documents(
     
     user_prompt = build_generate_prompt(documents_text, job_description, additional_info_text)
     
-    generation_mode = "customisation" if job_description else "general"
+    _jd_words = len(job_description.split()) if job_description else 0
+    if not job_description:
+        generation_mode = "general"
+    elif _jd_words <= 10:
+        generation_mode = "minimal_jd"
+    else:
+        generation_mode = "customisation"
     logger.info(
         "Prompt built: mode=%s, jd_chars=%d, additional_info=%s, prompt_chars=%d",
         generation_mode, len(job_description), bool(additional_info_text), len(user_prompt),

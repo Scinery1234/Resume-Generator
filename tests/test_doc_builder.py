@@ -418,7 +418,7 @@ class TestBuildWordDocumentWithTemplates:
         path = str(tmp_path / f"resume_{template_id}.docx")
         builder.build_word_document(path, FULL_CANDIDATE, template_id=template_id)
         doc = Document(path)
-        assert "JANE SMITH" in _get_all_text(doc)
+        assert "JANE SMITH" in _get_all_text(doc).upper()
 
     @pytest.mark.parametrize("template_id", TEMPLATE_IDS)
     def test_all_templates_contain_experience(self, builder, tmp_path, template_id):
@@ -501,7 +501,7 @@ class TestBuildHtmlPreviewWithTemplates:
     def test_all_templates_produce_valid_html(self, builder, template_id):
         result = builder.build_html_preview(FULL_CANDIDATE, template_id=template_id)
         assert "<!DOCTYPE html>" in result
-        assert "JANE SMITH" in result
+        assert "JANE SMITH" in result.upper()
 
     @pytest.mark.parametrize("template_id", TEMPLATE_IDS)
     def test_all_templates_contain_heading_color(self, builder, template_id):

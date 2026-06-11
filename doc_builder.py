@@ -116,6 +116,7 @@ TEMPLATES = {
         "section_size":     Pt(9),
         "body_size":        Pt(10.5),
         "name_align":       WD_ALIGN_PARAGRAPH.LEFT,
+        "name_uppercase":   False,
         "section_rule":     True,
         "html_heading":     "#374151",
         "html_rule":        "#d1d5db",
@@ -475,7 +476,10 @@ def _build_word_layout_a(doc: Document, candidate_data: Dict, tmpl: Dict):
     name_para = doc.add_paragraph()
     _set_para_spacing(name_para, before=0, after=2)
     name_para.alignment = tmpl["name_align"]
-    nr = name_para.add_run(candidate_data.get('name', '').strip().upper())
+    name_text = candidate_data.get('name', '').strip()
+    if tmpl.get("name_uppercase", True):
+        name_text = name_text.upper()
+    nr = name_para.add_run(name_text)
     nr.font.name      = tmpl["heading_font"]
     nr.font.size      = tmpl["name_size"]
     nr.font.bold      = True
@@ -521,16 +525,22 @@ def _add_body_sections_a(doc: Document, candidate_data: Dict, tmpl: Dict):
     key_skills = candidate_data.get('key_skills', [])
     if key_skills:
         _section_heading(doc, 'Key Skills', tmpl)
-        p = doc.add_paragraph()
-        _set_para_spacing(p, before=3, after=6)
-        r = p.add_run('  ·  '.join(str(s) for s in key_skills))
-        r.font.name = tmpl["body_font"]
-        r.font.size = tmpl["body_size"]
+        for skill in key_skills:
+            bp = doc.add_paragraph(style='List Bullet')
+            _set_para_spacing(bp, before=1, after=1)
+            pPr = bp._p.get_or_add_pPr()
+            ind = OxmlElement('w:ind')
+            ind.set(qn('w:left'),    '360')
+            ind.set(qn('w:hanging'), '180')
+            pPr.append(ind)
+            br = bp.add_run(str(skill))
+            br.font.name = tmpl["body_font"]
+            br.font.size = tmpl["body_size"]
 
-    # ── Work Experience ──────────────────────────────────────────────────────
+    # ── Professional Experience ──────────────────────────────────────────────
     experience = candidate_data.get('experience', [])
     if experience:
-        _section_heading(doc, 'Work Experience', tmpl)
+        _section_heading(doc, 'Professional Experience', tmpl)
         for i, exp in enumerate(experience):
             job_para = doc.add_paragraph()
             _set_para_spacing(job_para, before=4, after=0)
@@ -648,7 +658,7 @@ def _add_body_sections_a(doc: Document, candidate_data: Dict, tmpl: Dict):
     # ── Awards ───────────────────────────────────────────────────────────────
     awards = candidate_data.get('awards', [])
     if awards:
-        _section_heading(doc, 'Awards & Recognition', tmpl)
+        _section_heading(doc, 'Awards', tmpl)
         for award in awards:
             ap = doc.add_paragraph(style='List Bullet')
             _set_para_spacing(ap, before=1, after=1)
@@ -887,7 +897,7 @@ def _build_word_layout_b(doc: Document, candidate_data: Dict, tmpl: Dict):
     # WORK EXPERIENCE
     experience = candidate_data.get('experience', [])
     if experience:
-        _mn_heading(mn, 'Work Experience', tmpl)
+        _mn_heading(mn, 'Professional Experience', tmpl)
         for i, exp in enumerate(experience):
             # Job title + right-aligned dates
             jp = mn.add_paragraph()
@@ -957,7 +967,7 @@ def _build_word_layout_b(doc: Document, candidate_data: Dict, tmpl: Dict):
     # AWARDS
     awards = candidate_data.get('awards', [])
     if awards:
-        _mn_heading(mn, 'Awards & Recognition', tmpl)
+        _mn_heading(mn, 'Awards', tmpl)
         for award in awards:
             ap = mn.add_paragraph()
             _set_para_spacing(ap, before=1, after=1)
@@ -1129,10 +1139,10 @@ def _html_body_sections(candidate_data: Dict, tmpl: Dict) -> List[str]:
     # Key Skills
     key_skills = candidate_data.get('key_skills', [])
     if key_skills:
-        parts.append(section('Key Skills',
-            f'<p class="body-text">{"  ·  ".join(e(str(s)) for s in key_skills)}</p>'))
+        skills_html = '<ul class="exp-bullets">' + ''.join(f'<li>{e(str(s))}</li>' for s in key_skills) + '</ul>'
+        parts.append(section('Key Skills', skills_html))
 
-    # Work Experience
+    # Professional Experience
     experience = candidate_data.get('experience', [])
     if experience:
         exp_html = ''
@@ -1160,7 +1170,7 @@ def _html_body_sections(candidate_data: Dict, tmpl: Dict) -> List[str]:
             elif desc:
                 exp_html += f'<p class="body-text">{desc}</p>'
             exp_html += '</div>'
-        parts.append(section('Work Experience', exp_html))
+        parts.append(section('Professional Experience', exp_html))
 
     # Education
     education = candidate_data.get('education', [])
@@ -1193,7 +1203,7 @@ def _html_body_sections(candidate_data: Dict, tmpl: Dict) -> List[str]:
     awards = candidate_data.get('awards', [])
     if awards:
         a_html = '<ul class="exp-bullets">' + ''.join(f'<li>{e(str(a))}</li>' for a in awards) + '</ul>'
-        parts.append(section('Awards & Recognition', a_html))
+        parts.append(section('Awards', a_html))
 
     # Technical Skills
     tech_skills = candidate_data.get('technical_skills', [])
@@ -1286,7 +1296,8 @@ def _build_html_layout_a(candidate_data: Dict, tmpl: Dict) -> str:
     name_align = "left" if tmpl["name_align"] == WD_ALIGN_PARAGRAPH.LEFT else "center"
 
     body_sections = ''.join(_html_body_sections(candidate_data, tmpl))
-    name_html    = e(candidate_data.get('name', '').strip().upper())
+    name_raw  = candidate_data.get('name', '').strip()
+    name_html = e(name_raw.upper() if tmpl.get("name_uppercase", True) else name_raw)
     contact_html = '  ·  '.join(contact_parts)
 
     return f'''<!DOCTYPE html>
@@ -1479,12 +1490,12 @@ def _build_html_layout_b(candidate_data: Dict, tmpl: Dict) -> str:
             elif desc:
                 exp_html += f'<p class="body-text">{desc}</p>'
             exp_html += '</div>'
-        main_parts.append(main_section('Work Experience', exp_html))
+        main_parts.append(main_section('Professional Experience', exp_html))
 
     awards = candidate_data.get('awards', [])
     if awards:
         a_html = '<ul class="exp-bullets">' + ''.join(f'<li>{e(str(a))}</li>' for a in awards) + '</ul>'
-        main_parts.append(main_section('Awards & Recognition', a_html))
+        main_parts.append(main_section('Awards', a_html))
 
     tech_skills = candidate_data.get('technical_skills', [])
     ts_html = _tech_skills_html(tech_skills, e)
