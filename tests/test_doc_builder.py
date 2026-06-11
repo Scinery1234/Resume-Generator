@@ -418,7 +418,7 @@ class TestBuildWordDocumentWithTemplates:
         path = str(tmp_path / f"resume_{template_id}.docx")
         builder.build_word_document(path, FULL_CANDIDATE, template_id=template_id)
         doc = Document(path)
-        assert "JANE SMITH" in _get_all_text(doc)
+        assert "JANE SMITH" in _get_all_text(doc).upper()
 
     @pytest.mark.parametrize("template_id", TEMPLATE_IDS)
     def test_all_templates_contain_experience(self, builder, tmp_path, template_id):
@@ -485,12 +485,13 @@ class TestBuildWordDocumentWithTemplates:
         assert "Senior Software Engineer" in main_text
 
     def test_layout_c_name_is_in_first_paragraph(self, builder, tmp_path):
-        """Creative (Layout C) renders the name in the first paragraph (shaded header)."""
+        """Creative (Layout C) renders the name inside the full-width header table cell."""
         path = str(tmp_path / "creative.docx")
         builder.build_word_document(path, FULL_CANDIDATE, template_id="creative")
         doc = Document(path)
-        # First paragraph holds the shaded name
-        assert "JANE SMITH" in doc.paragraphs[0].text
+        # Name is in the first table cell (full-width header band, not a top-level paragraph)
+        header_text = " ".join(p.text for p in doc.tables[0].cell(0, 0).paragraphs)
+        assert "JANE SMITH" in header_text
 
 
 # ── Per-template HTML tests ───────────────────────────────────────────────────
@@ -500,7 +501,7 @@ class TestBuildHtmlPreviewWithTemplates:
     def test_all_templates_produce_valid_html(self, builder, template_id):
         result = builder.build_html_preview(FULL_CANDIDATE, template_id=template_id)
         assert "<!DOCTYPE html>" in result
-        assert "JANE SMITH" in result
+        assert "JANE SMITH" in result.upper()
 
     @pytest.mark.parametrize("template_id", TEMPLATE_IDS)
     def test_all_templates_contain_heading_color(self, builder, template_id):

@@ -116,32 +116,16 @@ def init_db():
 
 
 def get_db():
-    """FastAPI dependency that yields a database session for a single request.
-
-    Yields a `Session` and ensures it is closed after the request completes,
-    even if an exception is raised. If the initial connection fails, one retry
-    is attempted before propagating the error.
-
-    Example::
-
-        @app.get("/items")
-        def read_items(db: Session = Depends(get_db)):
-            return db.query(Item).all()
-    """
+    """FastAPI dependency that yields a database session for a single request."""
+    from sqlalchemy import text
     db = SessionLocal()
     try:
-        # Verify the connection is alive before handing it to the route handler.
-        db.execute("SELECT 1")
-        yield db
-    except Exception as e:
-        # Connection failed — close the broken session and open a fresh one.
+        db.execute(text("SELECT 1"))
+    except Exception:
+        # Connection check failed — close the broken session and open a fresh one.
         db.close()
-        logger = __import__('logging').getLogger(__name__)
-        logger.warning(f"Database connection failed, retrying: {e}")
         db = SessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
+    try:
+        yield db
     finally:
         db.close()

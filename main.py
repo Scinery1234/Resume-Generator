@@ -38,7 +38,7 @@ openai_client = OpenAI(api_key=_raw_openai_key) if _openai_key_is_real else None
 if not _openai_key_is_real:
     logger.warning("OPENAI_API_KEY is not configured — AI generation will be unavailable")
 
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
 # Initialize database
 init_db()
@@ -396,10 +396,16 @@ async def generate_from_documents(
     
     user_prompt = build_generate_prompt(documents_text, job_description, additional_info_text)
     
-    generation_mode = "customisation" if job_description else "general"
+    _jd_words = len(job_description.split()) if job_description else 0
+    if not job_description:
+        generation_mode = "general"
+    elif _jd_words <= 10:
+        generation_mode = "minimal_jd"
+    else:
+        generation_mode = "customisation"
     logger.info(
-        "Prompt built: mode=%s, length=%d chars, additional_info=%s",
-        generation_mode, len(user_prompt), bool(additional_info_text),
+        "Prompt built: mode=%s, jd_chars=%d, additional_info=%s, prompt_chars=%d",
+        generation_mode, len(job_description), bool(additional_info_text), len(user_prompt),
     )
 
     # Call OpenAI to generate the resume JSON
@@ -434,26 +440,20 @@ async def generate_from_documents(
     # Build the HTML preview
     preview_html = resume_builder.build_html_preview(resume_data, template_id=template)
 
-    # Always save the resume to the database (user_id=None for guests) so that
-    # the resume_id can be used for AI-powered edits without requiring login.
-    resume_id = None
-    try:
-        resume_record = Resume(
-            user_id=user_id,  # NULL for guest resumes
-            name=resume_data.get("name", "Untitled Resume"),
-            file_path=str(resume_path),
-            contact_info=json.dumps(resume_data.get("contact", {})),
-            resume_data=json.dumps(resume_data),
-            preview_html=preview_html,
-            template_id=template,
-        )
-        db.add(resume_record)
-        db.commit()
-        db.refresh(resume_record)
-        resume_id = resume_record.id
-    except Exception as e:
-        logger.error(f"Error saving resume to database: {e}")
-        db.rollback()
+    # Save the resume — resume_id is required for template switching and edits.
+    resume_record = Resume(
+        user_id=user_id,  # NULL for guest resumes
+        name=resume_data.get("name", "Untitled Resume"),
+        file_path=str(resume_path),
+        contact_info=json.dumps(resume_data.get("contact", {})),
+        resume_data=json.dumps(resume_data),
+        preview_html=preview_html,
+        template_id=template,
+    )
+    db.add(resume_record)
+    db.commit()
+    db.refresh(resume_record)
+    resume_id = resume_record.id
 
     logger.info("Resume generated: %s (name: %s)", safe_filename, resume_data.get("name", "unknown"))
     # Return a flat response — NOT wrapped in standardize_response — so the
@@ -464,6 +464,8 @@ async def generate_from_documents(
         "preview_html": preview_html,
         "data": resume_data,
         "resume_id": resume_id,
+        "generation_mode": generation_mode,
+        "template_id": template,
     }
 
 
@@ -607,25 +609,40 @@ async def get_user_resumes(user_id: Optional[int] = None, db: Session = Depends(
 
 @app.get("/api/resumes/{resume_id}/download", tags=["Resume Management"])
 async def download_resume(resume_id: int, db: Session = Depends(get_db)):
-    """Download a resume file"""
+    """Download a resume as a .docx, generated on-demand from the stored data.
+
+    Generates the document in memory each time so the correct template is
+    always applied — no dependency on ephemeral container filesystem files.
+    """
+    from fastapi.responses import StreamingResponse as _SR
     try:
         resume = db.query(Resume).filter(Resume.id == resume_id).first()
         if not resume:
             raise HTTPException(status_code=404, detail="Resume not found")
-        
-        if not resume.file_path or not Path(resume.file_path).exists():
-            raise HTTPException(status_code=404, detail="Resume file not found")
-        
-        return FileResponse(
-            resume.file_path,
+        if not resume.resume_data:
+            raise HTTPException(status_code=400, detail="Resume data not available for download")
+
+        resume_data  = json.loads(resume.resume_data)
+        template_id  = resume.template_id or "modern"
+
+        builder    = ResumeBuilder()
+        docx_bytes = builder.build_word_document_bytes(resume_data, template_id)
+
+        safe_name = sanitize_filename(
+            resume_data.get("name", "resume").replace(" ", "_")
+        )
+        filename = f"{safe_name}_{template_id}.docx"
+
+        return _SR(
+            io.BytesIO(docx_bytes),
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            filename=f"{resume.name}_resume.docx"
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error downloading resume: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error downloading resume: {str(e)}")
+        logger.error(f"Error generating resume for download: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating resume: {str(e)}")
 
 @app.get("/api/resumes/download-file/{filename}", tags=["Resume Management"])
 async def download_resume_by_filename(filename: str):

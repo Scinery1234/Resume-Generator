@@ -8,8 +8,8 @@ import { resumeAPI } from '../services/api';
 
 jest.mock('../services/api', () => ({
     resumeAPI: {
-        generate:           jest.fn(),
-        downloadByFilename: jest.fn(),
+        generate: jest.fn(),
+        download: jest.fn(),
     },
 }));
 
@@ -33,8 +33,8 @@ const renderPage = () =>
 
 const MOCK_RESULT = {
     status: 'success',
+    resume_id: 42,
     filename: 'resume_abc123.docx',
-    download_url: '/api/resumes/download-file/resume_abc123.docx',
     preview_html: '<html><body><div class="page"><div class="resume-name">JANE SMITH</div></div></body></html>',
     data: { name: 'Jane Smith' },
 };
@@ -44,7 +44,7 @@ const MOCK_RESULT = {
 describe('Input screen rendering', () => {
     test('renders page title', () => {
         renderPage();
-        expect(screen.getByText(/generate your resume with ai/i)).toBeInTheDocument();
+        expect(screen.getByText(/australian resume generator/i)).toBeInTheDocument();
     });
 
     test('renders upload drop zone', () => {
@@ -167,19 +167,19 @@ describe('Result screen', () => {
         );
         fireEvent.click(screen.getByRole('button', { name: /generate another/i }));
         await waitFor(() =>
-            expect(screen.getByText(/generate your resume with ai/i)).toBeInTheDocument()
+            expect(screen.getByText(/australian resume generator/i)).toBeInTheDocument()
         );
     });
 
-    test('download button calls downloadByFilename', async () => {
-        resumeAPI.downloadByFilename.mockResolvedValueOnce(new Blob(['fake docx']));
+    test('download button calls download with resume_id', async () => {
+        resumeAPI.download.mockResolvedValueOnce(new Blob(['fake docx']));
         await setupWithMockedGenerate();
         await waitFor(() =>
             expect(screen.getByRole('button', { name: /download .docx/i })).toBeInTheDocument()
         );
         fireEvent.click(screen.getByRole('button', { name: /download .docx/i }));
         await waitFor(() =>
-            expect(resumeAPI.downloadByFilename).toHaveBeenCalledWith('resume_abc123.docx')
+            expect(resumeAPI.download).toHaveBeenCalledWith(42)
         );
     });
 });

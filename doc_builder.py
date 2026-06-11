@@ -116,6 +116,7 @@ TEMPLATES = {
         "section_size":     Pt(9),
         "body_size":        Pt(10.5),
         "name_align":       WD_ALIGN_PARAGRAPH.LEFT,
+        "name_uppercase":   False,
         "section_rule":     True,
         "html_heading":     "#374151",
         "html_rule":        "#d1d5db",
@@ -475,7 +476,10 @@ def _build_word_layout_a(doc: Document, candidate_data: Dict, tmpl: Dict):
     name_para = doc.add_paragraph()
     _set_para_spacing(name_para, before=0, after=2)
     name_para.alignment = tmpl["name_align"]
-    nr = name_para.add_run(candidate_data.get('name', '').strip().upper())
+    name_text = candidate_data.get('name', '').strip()
+    if tmpl.get("name_uppercase", True):
+        name_text = name_text.upper()
+    nr = name_para.add_run(name_text)
     nr.font.name      = tmpl["heading_font"]
     nr.font.size      = tmpl["name_size"]
     nr.font.bold      = True
@@ -521,16 +525,22 @@ def _add_body_sections_a(doc: Document, candidate_data: Dict, tmpl: Dict):
     key_skills = candidate_data.get('key_skills', [])
     if key_skills:
         _section_heading(doc, 'Key Skills', tmpl)
-        p = doc.add_paragraph()
-        _set_para_spacing(p, before=3, after=6)
-        r = p.add_run('  ·  '.join(str(s) for s in key_skills))
-        r.font.name = tmpl["body_font"]
-        r.font.size = tmpl["body_size"]
+        for skill in key_skills:
+            bp = doc.add_paragraph(style='List Bullet')
+            _set_para_spacing(bp, before=1, after=1)
+            pPr = bp._p.get_or_add_pPr()
+            ind = OxmlElement('w:ind')
+            ind.set(qn('w:left'),    '360')
+            ind.set(qn('w:hanging'), '180')
+            pPr.append(ind)
+            br = bp.add_run(str(skill))
+            br.font.name = tmpl["body_font"]
+            br.font.size = tmpl["body_size"]
 
-    # ── Work Experience ──────────────────────────────────────────────────────
+    # ── Professional Experience ──────────────────────────────────────────────
     experience = candidate_data.get('experience', [])
     if experience:
-        _section_heading(doc, 'Work Experience', tmpl)
+        _section_heading(doc, 'Professional Experience', tmpl)
         for i, exp in enumerate(experience):
             job_para = doc.add_paragraph()
             _set_para_spacing(job_para, before=4, after=0)
@@ -648,7 +658,7 @@ def _add_body_sections_a(doc: Document, candidate_data: Dict, tmpl: Dict):
     # ── Awards ───────────────────────────────────────────────────────────────
     awards = candidate_data.get('awards', [])
     if awards:
-        _section_heading(doc, 'Awards & Recognition', tmpl)
+        _section_heading(doc, 'Awards', tmpl)
         for award in awards:
             ap = doc.add_paragraph(style='List Bullet')
             _set_para_spacing(ap, before=1, after=1)
@@ -887,7 +897,7 @@ def _build_word_layout_b(doc: Document, candidate_data: Dict, tmpl: Dict):
     # WORK EXPERIENCE
     experience = candidate_data.get('experience', [])
     if experience:
-        _mn_heading(mn, 'Work Experience', tmpl)
+        _mn_heading(mn, 'Professional Experience', tmpl)
         for i, exp in enumerate(experience):
             # Job title + right-aligned dates
             jp = mn.add_paragraph()
@@ -957,7 +967,7 @@ def _build_word_layout_b(doc: Document, candidate_data: Dict, tmpl: Dict):
     # AWARDS
     awards = candidate_data.get('awards', [])
     if awards:
-        _mn_heading(mn, 'Awards & Recognition', tmpl)
+        _mn_heading(mn, 'Awards', tmpl)
         for award in awards:
             ap = mn.add_paragraph()
             _set_para_spacing(ap, before=1, after=1)
@@ -1010,10 +1020,19 @@ def _build_word_layout_b(doc: Document, candidate_data: Dict, tmpl: Dict):
 
 def _build_word_layout_c(doc: Document, candidate_data: Dict, tmpl: Dict):
     """
-    Build the header-band layout (Layout C).
-    A shaded header at the top (name + contact on coloured background) is
-    followed by the standard single-column body sections.
+    Layout C – full-width purple header band + single-column body.
+
+    The header is a borderless table that spans the full page width.  To
+    achieve a true bleed-to-edge effect we use a continuous section break:
+      • Section 1 (zero margins)  → contains the header table
+      • Section 2 (2.2 cm margins) → contains all body paragraphs
+
+    The body section properties are set on the document body-level sectPr
+    (via _set_doc_margins).  The section 1 properties are stored in the break
+    paragraph's pPr/sectPr (Word reads that as "end of section 1 here").
     """
+    # Section 2 (body) gets standard margins.  _set_doc_margins writes to the
+    # body-level sectPr, which Word treats as the LAST section.
     _set_doc_margins(doc)
 
     contact: Dict = candidate_data.get('contact', {})
@@ -1023,32 +1042,70 @@ def _build_word_layout_c(doc: Document, candidate_data: Dict, tmpl: Dict):
     if contact.get('location'): contact_parts.append(contact['location'])
     if contact.get('linkedin'): contact_parts.append(contact['linkedin'])
 
-    header_hex  = tmpl["docx_header_bg_hex"]
-    header_rgb  = tmpl["docx_header_text_rgb"]
+    header_hex = tmpl["docx_header_bg_hex"]
+    header_rgb = tmpl["docx_header_text_rgb"]
+    _PAD_L = 2.2   # horizontal padding inside the header cell (cm)
+    _PAD_R = 2.2
 
-    # ── Name (shaded) ────────────────────────────────────────────────────────
-    name_para = doc.add_paragraph()
-    _set_para_spacing(name_para, before=14, after=2)
-    _set_paragraph_shading(name_para, header_hex)
-    nr = name_para.add_run(candidate_data.get('name', '').strip().upper())
-    nr.font.name      = tmpl["heading_font"]
-    nr.font.size      = tmpl["name_size"]
-    nr.font.bold      = True
-    nr.font.color.rgb = header_rgb
+    # ── Full-width header table (section 1, zero margins) ────────────────────
+    hdr_table = doc.add_table(rows=1, cols=1)
+    _clear_table_borders(hdr_table)
+    _set_table_width(hdr_table, 21.0)
+    hdr_cell = hdr_table.cell(0, 0)
+    _set_cell_width(hdr_cell, 21.0)
+    _add_cell_shading(hdr_cell, header_hex)
 
-    # ── Contact (shaded) ─────────────────────────────────────────────────────
-    contact_para = doc.add_paragraph()
-    _set_para_spacing(contact_para, before=0, after=14)
-    _set_paragraph_shading(contact_para, header_hex)
-    cr = contact_para.add_run('  ·  '.join(contact_parts))
-    cr.font.name      = tmpl["body_font"]
-    cr.font.size      = tmpl["contact_size"]
-    cr.font.color.rgb = header_rgb
+    # Name
+    hnp = hdr_cell.paragraphs[0]
+    _set_para_spacing(hnp, before=28, after=4)
+    _set_para_indent(hnp, _PAD_L, _PAD_R)
+    hnr = hnp.add_run(candidate_data.get('name', '').strip().upper())
+    hnr.font.name      = tmpl["heading_font"]
+    hnr.font.size      = tmpl["name_size"]
+    hnr.font.bold      = True
+    hnr.font.color.rgb = header_rgb
 
-    # Rule separating header from body
-    _add_horizontal_rule(doc, tmpl["rule_color"])
+    # Contact
+    hcp = hdr_cell.add_paragraph()
+    _set_para_spacing(hcp, before=0, after=22)
+    _set_para_indent(hcp, _PAD_L, _PAD_R)
+    hcr = hcp.add_run('  ·  '.join(contact_parts))
+    hcr.font.name      = tmpl["body_font"]
+    hcr.font.size      = tmpl["contact_size"]
+    hcr.font.color.rgb = header_rgb
 
-    # ── Body (same as Layout A) ───────────────────────────────────────────────
+    # ── Continuous section break ─────────────────────────────────────────────
+    # This invisible paragraph ends section 1 (zero margins) so that the body
+    # paragraphs below it fall into section 2 (standard 2.2 cm margins).
+    brk = doc.add_paragraph()
+    _set_para_spacing(brk, before=0, after=0)
+    brk_pPr = brk._p.get_or_add_pPr()
+    # Paragraph-mark rPr: 1 pt font so the line takes up no visual space.
+    rPr = OxmlElement('w:rPr')
+    sz  = OxmlElement('w:sz')
+    sz.set(qn('w:val'), '2')
+    rPr.append(sz)
+    brk_pPr.append(rPr)
+    # sectPr in pPr → defines section 1 properties (zero margins, continuous).
+    sectPr = OxmlElement('w:sectPr')
+    sectType = OxmlElement('w:type')
+    sectType.set(qn('w:val'), 'continuous')
+    sectPr.append(sectType)
+    twips_w = str(int(round(21.0 / 2.54 * 1440)))   # 11906
+    twips_h = str(int(round(29.7 / 2.54 * 1440)))   # 16838
+    pgSz = OxmlElement('w:pgSz')
+    pgSz.set(qn('w:w'), twips_w)
+    pgSz.set(qn('w:h'), twips_h)
+    sectPr.append(pgSz)
+    pgMar = OxmlElement('w:pgMar')
+    for attr, val in [('top', '0'), ('bottom', '0'), ('left', '0'),
+                      ('right', '0'), ('header', '0'), ('footer', '0'),
+                      ('gutter', '0')]:
+        pgMar.set(qn(f'w:{attr}'), val)
+    sectPr.append(pgMar)
+    brk_pPr.append(sectPr)
+
+    # ── Body sections (section 2 – standard 2.2 cm margins) ──────────────────
     _add_body_sections_a(doc, candidate_data, tmpl)
 
 
@@ -1082,10 +1139,10 @@ def _html_body_sections(candidate_data: Dict, tmpl: Dict) -> List[str]:
     # Key Skills
     key_skills = candidate_data.get('key_skills', [])
     if key_skills:
-        parts.append(section('Key Skills',
-            f'<p class="body-text">{"  ·  ".join(e(str(s)) for s in key_skills)}</p>'))
+        skills_html = '<ul class="exp-bullets">' + ''.join(f'<li>{e(str(s))}</li>' for s in key_skills) + '</ul>'
+        parts.append(section('Key Skills', skills_html))
 
-    # Work Experience
+    # Professional Experience
     experience = candidate_data.get('experience', [])
     if experience:
         exp_html = ''
@@ -1113,7 +1170,7 @@ def _html_body_sections(candidate_data: Dict, tmpl: Dict) -> List[str]:
             elif desc:
                 exp_html += f'<p class="body-text">{desc}</p>'
             exp_html += '</div>'
-        parts.append(section('Work Experience', exp_html))
+        parts.append(section('Professional Experience', exp_html))
 
     # Education
     education = candidate_data.get('education', [])
@@ -1146,7 +1203,7 @@ def _html_body_sections(candidate_data: Dict, tmpl: Dict) -> List[str]:
     awards = candidate_data.get('awards', [])
     if awards:
         a_html = '<ul class="exp-bullets">' + ''.join(f'<li>{e(str(a))}</li>' for a in awards) + '</ul>'
-        parts.append(section('Awards & Recognition', a_html))
+        parts.append(section('Awards', a_html))
 
     # Technical Skills
     tech_skills = candidate_data.get('technical_skills', [])
@@ -1239,7 +1296,8 @@ def _build_html_layout_a(candidate_data: Dict, tmpl: Dict) -> str:
     name_align = "left" if tmpl["name_align"] == WD_ALIGN_PARAGRAPH.LEFT else "center"
 
     body_sections = ''.join(_html_body_sections(candidate_data, tmpl))
-    name_html    = e(candidate_data.get('name', '').strip().upper())
+    name_raw  = candidate_data.get('name', '').strip()
+    name_html = e(name_raw.upper() if tmpl.get("name_uppercase", True) else name_raw)
     contact_html = '  ·  '.join(contact_parts)
 
     return f'''<!DOCTYPE html>
@@ -1247,8 +1305,10 @@ def _build_html_layout_a(candidate_data: Dict, tmpl: Dict) -> str:
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="color-scheme" content="light"/>
 <title>Resume Preview</title>
 <style>
+  :root {{ color-scheme: light; }}
   *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{
     font-family: {font_family};
@@ -1430,12 +1490,12 @@ def _build_html_layout_b(candidate_data: Dict, tmpl: Dict) -> str:
             elif desc:
                 exp_html += f'<p class="body-text">{desc}</p>'
             exp_html += '</div>'
-        main_parts.append(main_section('Work Experience', exp_html))
+        main_parts.append(main_section('Professional Experience', exp_html))
 
     awards = candidate_data.get('awards', [])
     if awards:
         a_html = '<ul class="exp-bullets">' + ''.join(f'<li>{e(str(a))}</li>' for a in awards) + '</ul>'
-        main_parts.append(main_section('Awards & Recognition', a_html))
+        main_parts.append(main_section('Awards', a_html))
 
     tech_skills = candidate_data.get('technical_skills', [])
     ts_html = _tech_skills_html(tech_skills, e)
@@ -1454,8 +1514,10 @@ def _build_html_layout_b(candidate_data: Dict, tmpl: Dict) -> str:
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="color-scheme" content="light"/>
 <title>Resume Preview</title>
 <style>
+  :root {{ color-scheme: light; }}
   *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{
     font-family: {font_family};
@@ -1587,8 +1649,10 @@ def _build_html_layout_c(candidate_data: Dict, tmpl: Dict) -> str:
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="color-scheme" content="light"/>
 <title>Resume Preview</title>
 <style>
+  :root {{ color-scheme: light; }}
   *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{
     font-family: {font_family};
@@ -1708,6 +1772,37 @@ class ResumeBuilder:
         doc.save(output_path)
         logger.info(f'Resume saved → {output_path}  (template: {template_id}, layout: {layout})')
         return output_path
+
+    # ── In-memory Word document builder ─────────────────────────────────────
+    def build_word_document_bytes(self, candidate_data: Dict,
+                                  template_id: str = "modern") -> bytes:
+        """Build a .docx and return its raw bytes (no filesystem required).
+
+        Identical logic to build_word_document but streams into a BytesIO
+        buffer instead of writing to disk — safe for ephemeral containers.
+        """
+        import io as _io
+        candidate_data = _normalize_resume_data(candidate_data)
+        tmpl   = _get_template(template_id)
+        layout = tmpl.get("layout", "A")
+
+        doc = Document()
+        normal = doc.styles['Normal']
+        normal.font.name = tmpl["body_font"]
+        normal.font.size = tmpl["body_size"]
+
+        if layout == "B":
+            _build_word_layout_b(doc, candidate_data, tmpl)
+        elif layout == "C":
+            _build_word_layout_c(doc, candidate_data, tmpl)
+        else:
+            _build_word_layout_a(doc, candidate_data, tmpl)
+
+        buf = _io.BytesIO()
+        doc.save(buf)
+        buf.seek(0)
+        logger.info(f'Resume built in memory  (template: {template_id}, layout: {layout})')
+        return buf.getvalue()
 
     # ── HTML preview builder ─────────────────────────────────────────────────
     def build_html_preview(self, candidate_data: Dict,

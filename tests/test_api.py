@@ -226,6 +226,50 @@ class TestDownloadResume:
         resp = client.get("/api/resumes/download-file/does_not_exist_xyz.docx")
         assert resp.status_code == 404
 
+    def test_download_by_id_generates_docx_on_demand(self, monkeypatch):
+        """GET /api/resumes/{id}/download must generate from DB regardless of filesystem state."""
+        _mock_openai_client(monkeypatch)
+        txt = b"Jane Smith\nSoftware Engineer"
+        gen = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer", "template": "classic"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert gen.status_code == 200
+        resume_id = gen.json()["resume_id"]
+
+        dl = client.get(f"/api/resumes/{resume_id}/download")
+        assert dl.status_code == 200
+        assert "application/vnd.openxmlformats" in dl.headers["content-type"]
+        assert len(dl.content) > 5_000  # real DOCX must be non-trivial size
+
+    def test_download_by_id_reflects_switched_template(self, monkeypatch):
+        """After switch-template, download-by-id must use the new template."""
+        _mock_openai_client(monkeypatch)
+        txt = b"Jane Smith\nSoftware Engineer"
+        gen = client.post(
+            "/api/generate",
+            data={"job_description": "Python developer", "template": "classic"},
+            files=[("files", ("cv.txt", io.BytesIO(txt), "text/plain"))],
+        )
+        assert gen.status_code == 200
+        resume_id = gen.json()["resume_id"]
+
+        # Switch to modern (sidebar layout)
+        sw = client.post(
+            f"/api/resumes/{resume_id}/switch-template",
+            data={"template_id": "modern"},
+        )
+        assert sw.status_code == 200
+
+        dl = client.get(f"/api/resumes/{resume_id}/download")
+        assert dl.status_code == 200
+        assert "application/vnd.openxmlformats" in dl.headers["content-type"]
+
+    def test_download_by_id_nonexistent_returns_404(self):
+        resp = client.get("/api/resumes/999999/download")
+        assert resp.status_code == 404
+
 
 # ── Templates endpoint ───────────────────────────────────────────────────────
 
@@ -265,7 +309,7 @@ class TestTemplates:
         assert resp.status_code == 200
         for tid, html_str in resp.json().items():
             assert "<!DOCTYPE html>" in html_str, f"{tid} preview missing DOCTYPE"
-            assert "ALEX JOHNSON" in html_str, f"{tid} preview missing dummy candidate name"
+            assert "ALEX JOHNSON" in html_str.upper(), f"{tid} preview missing dummy candidate name"
 
     def test_template_previews_executive_has_amber_rule(self):
         resp = client.get("/api/templates/previews")
