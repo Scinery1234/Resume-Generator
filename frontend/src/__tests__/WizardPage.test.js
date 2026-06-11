@@ -44,7 +44,7 @@ const MOCK_RESULT = {
 describe('Input screen rendering', () => {
     test('renders page title', () => {
         renderPage();
-        expect(screen.getByText(/generate your resume with ai/i)).toBeInTheDocument();
+        expect(screen.getByText(/australian resume generator/i)).toBeInTheDocument();
     });
 
     test('renders upload drop zone', () => {
@@ -167,7 +167,7 @@ describe('Result screen', () => {
         );
         fireEvent.click(screen.getByRole('button', { name: /generate another/i }));
         await waitFor(() =>
-            expect(screen.getByText(/generate your resume with ai/i)).toBeInTheDocument()
+            expect(screen.getByText(/australian resume generator/i)).toBeInTheDocument()
         );
     });
 

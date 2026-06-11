@@ -20,6 +20,22 @@ function fileIcon(filename) {
     return '📃';
 }
 
+// ── Generation mode badge ────────────────────────────────────────────────────
+const MODE_LABELS = {
+    customisation: { text: 'Tailored to Job Description', color: '#0369a1' },
+    minimal_jd:    { text: 'Role-Signal Mode',            color: '#0891b2' },
+    general:       { text: 'General Resume',              color: '#64748b' },
+};
+
+function GenerationModeBadge({ mode }) {
+    const info = MODE_LABELS[mode] || { text: 'Generated', color: '#64748b' };
+    return (
+        <span className="gen-mode-badge" style={{ background: info.color }}>
+            {info.text}
+        </span>
+    );
+}
+
 // ── Result view ──────────────────────────────────────────────────────────────
 const GUEST_MAX_EDITS = 3;
 const PAID_MAX_EDITS  = 50;
@@ -147,9 +163,7 @@ function ResultView({ result, onReset, onUpdate, activeTemplate, switchingTempla
                 <div>
                     <h2>Your resume is ready!</h2>
                     <p>
-                        {result.generation_mode === 'customisation'
-                            ? 'Tailored to your job description using AI.'
-                            : 'Generated from your documents (no job description provided).'}
+                        <GenerationModeBadge mode={result.generation_mode} />
                         {' '}Download your .docx below.
                     </p>
                 </div>
@@ -158,7 +172,7 @@ function ResultView({ result, onReset, onUpdate, activeTemplate, switchingTempla
             {/* ── Template switcher ── */}
             {result.resume_id && (
                 <div className="gen-template-switcher">
-                    <span className="gen-template-switcher__label">Layout:</span>
+                    <span className="gen-template-switcher__label">Template:</span>
                     {TEMPLATES.map(t => (
                         <button
                             key={t.id}
@@ -779,10 +793,10 @@ const WizardPage = () => {
 
             {/* Hero */}
             <div className="gen-hero">
-                <h1>Generate Your Resume with AI</h1>
+                <h1>Australian Resume Generator</h1>
                 <p>
-                    Upload up to {MAX_FILES} supporting documents (old resumes, LinkedIn exports, cover
-                    letters) and paste the job description — our AI does the rest in seconds.
+                    Upload your existing resume and paste the job description. Our AI tailors every
+                    section to the role — Australian English, ATS-ready, ready to download in 30 seconds.
                 </p>
             </div>
 
