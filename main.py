@@ -38,7 +38,7 @@ openai_client = OpenAI(api_key=_raw_openai_key) if _openai_key_is_real else None
 if not _openai_key_is_real:
     logger.warning("OPENAI_API_KEY is not configured — AI generation will be unavailable")
 
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
 # Initialize database
 init_db()
@@ -398,8 +398,8 @@ async def generate_from_documents(
     
     generation_mode = "customisation" if job_description else "general"
     logger.info(
-        "Prompt built: mode=%s, length=%d chars, additional_info=%s",
-        generation_mode, len(user_prompt), bool(additional_info_text),
+        "Prompt built: mode=%s, jd_chars=%d, additional_info=%s, prompt_chars=%d",
+        generation_mode, len(job_description), bool(additional_info_text), len(user_prompt),
     )
 
     # Call OpenAI to generate the resume JSON
@@ -458,6 +458,8 @@ async def generate_from_documents(
         "preview_html": preview_html,
         "data": resume_data,
         "resume_id": resume_id,
+        "generation_mode": generation_mode,
+        "template_id": template,
     }
 
 
