@@ -52,6 +52,7 @@ const LandingPage = () => {
                         <li><a href="#features">Features</a></li>
                         <li><a href="#how-it-works">How it works</a></li>
                         <li><a href="#pricing">Pricing</a></li>
+                        <li><button className="lp-nav__preview-link" onClick={() => navigate('/preview')}>Preview Templates</button></li>
                     </ul>
                     <button
                         className="btn-primary lp-nav__cta"
@@ -82,7 +83,7 @@ const LandingPage = () => {
                                 <path d="M3.75 9h10.5M9.75 4.5 14.25 9l-4.5 4.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
                             </svg>
                         </button>
-                        <a href="#how-it-works" className="lp-hero__link">See how it works</a>
+                        <button className="lp-hero__link" onClick={() => navigate('/preview')}>Browse templates</button>
                     </div>
                     <p className="lp-hero__note">No account required · No credit card · Free to generate</p>
                 </div>
