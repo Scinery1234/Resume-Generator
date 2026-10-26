@@ -139,10 +139,13 @@ app.add_middleware(
 )
 
 # File upload configuration
-UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./uploads"))
-RESUMES_DIR = Path(os.getenv("RESUMES_DIR", "./resumes"))
-UPLOAD_DIR.mkdir(exist_ok=True)
-RESUMES_DIR.mkdir(exist_ok=True)
+# On Vercel only /tmp is writable (and not persistent); downloads are rebuilt
+# from the database, so nothing relies on these files surviving.
+_DATA_ROOT = Path("/tmp") if os.getenv("VERCEL") else Path(".")
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", _DATA_ROOT / "uploads"))
+RESUMES_DIR = Path(os.getenv("RESUMES_DIR", _DATA_ROOT / "resumes"))
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+RESUMES_DIR.mkdir(parents=True, exist_ok=True)
 # Note: MAX_FILES, MAX_FILE_SIZE, ALLOWED_EXTENSIONS are now in utils.py
 
 # Pydantic Models

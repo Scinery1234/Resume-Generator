@@ -344,22 +344,15 @@ Resume-Generator/
 
 ## Deployment
 
-### Backend (Render)
+The whole app (React frontend and FastAPI backend) deploys to [Vercel](https://vercel.com/) as one project. `vercel.json` builds the frontend from `frontend/` and runs the backend as a Python function (`api/index.py`) on the same domain, so no API URL or CORS setup is needed.
 
-1. Create a new **Web Service** on [Render](https://render.com/).
-2. Set the **Build Command** to `pip install -r requirements.txt`.
-3. Set the **Start Command** to `uvicorn main:app --host 0.0.0.0 --port $PORT`.
-4. Add the following environment variables in the Render dashboard:
-   - `OPENAI_API_KEY` — your OpenAI API key
-   - `DATABASE_URL` — Render PostgreSQL connection string (auto-provided if you add a PostgreSQL service)
-   - `CORS_ORIGINS` — your frontend domain (e.g. `https://your-app.vercel.app`)
+1. Import the repository into Vercel and leave the **Root Directory** empty (the repo root), with **Framework Preset** set to *Other*.
+2. Add a Postgres database: **Storage → Create Database → Neon** (free tier) and connect it to the project. This sets `DATABASE_URL`.
+3. Add the environment variable `OPENAI_API_KEY`.
+4. Do not set `REACT_APP_API_URL`; it is only for a backend hosted on a different domain.
+5. Deploy. Every push to `main` deploys to production; other branches get preview URLs.
 
-### Frontend (Vercel)
-
-1. Connect your repository to [Vercel](https://vercel.com/).
-2. Set the **Root Directory** to `frontend`.
-3. Add the following environment variable in the Vercel dashboard:
-   - `REACT_APP_API_URL` — your Render backend URL (e.g. `https://your-api.onrender.com`)
-
-See `VERCEL_DEPLOYMENT.md` for a detailed step-by-step guide.
-
+Notes:
+- Without `DATABASE_URL` the backend falls back to SQLite, which does not persist on Vercel.
+- Generation must finish within the function's `maxDuration` (60 s in `vercel.json`).
+- Vercel's Hobby plan is for non-commercial use only.

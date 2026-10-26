@@ -1,19 +1,17 @@
 import axios from 'axios';
 
-// In development the CRA proxy (package.json "proxy") forwards /api/* to localhost:8000.
-// In production set REACT_APP_API_URL to the backend's public URL.
-const API_BASE_URL = process.env.REACT_APP_API_URL || '';
+// By default the API is same-origin: in development the CRA proxy (package.json
+// "proxy") forwards /api/* to localhost:8000, and on Vercel the backend runs as
+// a function on the same domain. Set REACT_APP_API_URL only for a backend hosted
+// elsewhere. Trailing slashes are stripped so `${API_BASE_URL}/health` never
+// becomes `//health`.
+export const API_BASE_URL = (process.env.REACT_APP_API_URL || '').replace(/\/+$/, '');
 
-// Log API URL to help debug (in both dev and prod)
-console.log('🔗 API Base URL:', API_BASE_URL || '(empty - using proxy in dev)');
-if (!API_BASE_URL && process.env.NODE_ENV === 'production') {
-  console.error('⚠️ REACT_APP_API_URL is not set! API calls will fail.');
-  console.error('Set REACT_APP_API_URL in Vercel Environment Variables.');
-}
+console.log('🔗 API Base URL:', API_BASE_URL || '(same origin)');
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 180000, // 3 minutes — covers Render cold-start + OpenAI generation time
+  timeout: 180000, // 3 minutes — covers cold start + OpenAI generation time
   headers: {
     'Content-Type': 'application/json',
   },
@@ -174,11 +172,11 @@ export const resumeAPI = {
       });
       
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        throw new Error('Failed to fetch - This usually means CORS is blocking the request or backend is unreachable. Check backend CORS_ORIGINS includes your Vercel domain.');
+        throw new Error('Failed to fetch - the backend is unreachable or CORS is blocking the request.');
       }
       
       if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-        throw new Error(`Cannot connect to backend at ${API_BASE_URL}. Backend may be sleeping (Render free tier) or CORS is blocking the request.`);
+        throw new Error(`Cannot connect to backend at ${API_BASE_URL || window.location.origin}. It may be down or CORS is blocking the request.`);
       }
       
       throw error;

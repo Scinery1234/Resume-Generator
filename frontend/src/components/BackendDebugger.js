@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { healthCheck } from '../services/api';
+import { API_BASE_URL } from '../services/api';
 
 const BackendDebugger = () => {
     const [status, setStatus] = useState('checking');
@@ -8,8 +8,8 @@ const BackendDebugger = () => {
 
     useEffect(() => {
         // Get API URL from environment
-        const url = process.env.REACT_APP_API_URL || '(not set)';
-        setApiUrl(url);
+        const url = API_BASE_URL;
+        setApiUrl(url || '(same origin)');
 
         // Run health check
         const checkHealth = async () => {
@@ -70,7 +70,7 @@ const BackendDebugger = () => {
 
     const testEndpoint = async (endpoint) => {
         try {
-            const url = process.env.REACT_APP_API_URL;
+            const url = API_BASE_URL;
             const response = await fetch(`${url}${endpoint}`);
             const text = await response.text();
             return {
