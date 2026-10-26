@@ -15,7 +15,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from database import get_db, init_db
 from models import User, Resume
-from doc_builder import ResumeBuilder, TEMPLATE_LIST, DUMMY_CANDIDATE
+from doc_builder import ResumeBuilder
 from prompts import SYSTEM_PROMPT_DRAFT, SYSTEM_PROMPT_GENERATE, SYSTEM_PROMPT_EDIT, create_resume_prompt, build_generate_prompt
 from utils import (
     sanitize_filename, validate_file_extension, get_max_prompts_for_tier,
@@ -331,7 +331,6 @@ async def generate_from_documents(
     files: List[UploadFile] = File(default=[]),
     job_description: str = Form(default=""),
     additional_info: str = Form(default=""),
-    template: str = Form(default="modern"),
     user_id: Optional[int] = Form(default=None),  # Optional user ID for logged-in users
     db: Session = Depends(get_db),
 ):
@@ -437,15 +436,15 @@ async def generate_from_documents(
         # Sanitize filename (though UUID should be safe, this is defensive)
         safe_filename = sanitize_filename(resume_filename)
         resume_path = RESUMES_DIR / safe_filename
-        resume_builder.build_word_document(str(resume_path), resume_data, template_id=template)
+        resume_builder.build_word_document(str(resume_path), resume_data)
 
         # Build the HTML preview
-        preview_html = resume_builder.build_html_preview(resume_data, template_id=template)
+        preview_html = resume_builder.build_html_preview(resume_data)
     except Exception as exc:
         logger.exception("Resume document build failed")
         raise HTTPException(status_code=500, detail=f"Failed to build resume document: {exc}")
 
-    # Save the resume — resume_id is required for template switching and edits.
+    # Save the resume — resume_id is required for edits.
     try:
         resume_record = Resume(
             user_id=user_id,  # NULL for guest resumes
@@ -454,7 +453,6 @@ async def generate_from_documents(
             contact_info=json.dumps(resume_data.get("contact", {})),
             resume_data=json.dumps(resume_data),
             preview_html=preview_html,
-            template_id=template,
         )
         db.add(resume_record)
         db.commit()
@@ -475,7 +473,6 @@ async def generate_from_documents(
         "data": resume_data,
         "resume_id": resume_id,
         "generation_mode": generation_mode,
-        "template_id": template,
     }
 
 
@@ -621,8 +618,8 @@ async def get_user_resumes(user_id: Optional[int] = None, db: Session = Depends(
 async def download_resume(resume_id: int, db: Session = Depends(get_db)):
     """Download a resume as a .docx, generated on-demand from the stored data.
 
-    Generates the document in memory each time so the correct template is
-    always applied — no dependency on ephemeral container filesystem files.
+    Generates the document in memory each time — no dependency on ephemeral
+    container filesystem files.
     """
     from fastapi.responses import StreamingResponse as _SR
     try:
@@ -633,15 +630,14 @@ async def download_resume(resume_id: int, db: Session = Depends(get_db)):
             raise HTTPException(status_code=400, detail="Resume data not available for download")
 
         resume_data  = json.loads(resume.resume_data)
-        template_id  = resume.template_id or "modern"
 
         builder    = ResumeBuilder()
-        docx_bytes = builder.build_word_document_bytes(resume_data, template_id)
+        docx_bytes = builder.build_word_document_bytes(resume_data)
 
         safe_name = sanitize_filename(
             resume_data.get("name", "resume").replace(" ", "_")
         )
-        filename = f"{safe_name}_{template_id}.docx"
+        filename = f"{safe_name}.docx"
 
         return _SR(
             io.BytesIO(docx_bytes),
@@ -810,13 +806,12 @@ Return ONLY the updated JSON object — no other text."""
         )
         updated_data = json.loads(response.choices[0].message.content)
 
-        # Update resume — preserve the template that was last applied
-        active_template = resume.template_id or "modern"
+        # Update resume
         resume_builder = ResumeBuilder()
         resume_filename = f"resume_{uuid.uuid4().hex[:10]}.docx"
         resume_path = RESUMES_DIR / resume_filename
-        resume_builder.build_word_document(str(resume_path), updated_data, template_id=active_template)
-        preview_html = resume_builder.build_html_preview(updated_data, template_id=active_template)
+        resume_builder.build_word_document(str(resume_path), updated_data)
+        preview_html = resume_builder.build_html_preview(updated_data)
         
         resume.resume_data = json.dumps(updated_data)
         resume.preview_html = preview_html
@@ -866,14 +861,13 @@ async def update_resume_inline(
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
     
-    # Rebuild preview and document — preserve the template that was last applied
-    active_template = resume.template_id or "modern"
+    # Rebuild preview and document
     resume_builder = ResumeBuilder()
     resume_filename = f"resume_{uuid.uuid4().hex[:10]}.docx"
     safe_filename = sanitize_filename(resume_filename)
     resume_path = RESUMES_DIR / safe_filename
-    resume_builder.build_word_document(str(resume_path), resume_data, template_id=active_template)
-    preview_html = resume_builder.build_html_preview(resume_data, template_id=active_template)
+    resume_builder.build_word_document(str(resume_path), resume_data)
+    preview_html = resume_builder.build_html_preview(resume_data)
     
     resume.resume_data = json.dumps(resume_data)
     resume.preview_html = preview_html
@@ -892,55 +886,6 @@ async def update_resume_inline(
     }
 
 
-@app.post("/api/resumes/{resume_id}/switch-template", tags=["Resume Editing"])
-async def switch_resume_template(
-    resume_id: int,
-    template_id: str = Form(...),
-    user_id: Optional[int] = Form(default=None),
-    db: Session = Depends(get_db),
-):
-    """Re-render a resume with a different template without consuming any edit quota.
-
-    Works for both guests (user_id omitted) and logged-in users.
-    No OpenAI call is made — only the visual layout changes.
-    """
-    if user_id:
-        resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id == user_id).first()
-    else:
-        resume = db.query(Resume).filter(Resume.id == resume_id, Resume.user_id.is_(None)).first()
-
-    if not resume:
-        raise HTTPException(status_code=404, detail="Resume not found")
-    if not resume.resume_data:
-        raise HTTPException(status_code=400, detail="Resume data not available")
-
-    # Validate template_id
-    valid_template_ids = {t["id"] for t in TEMPLATE_LIST}
-    if template_id not in valid_template_ids:
-        raise HTTPException(status_code=400, detail=f"Unknown template '{template_id}'")
-
-    resume_data = json.loads(resume.resume_data)
-    resume_builder = ResumeBuilder()
-    resume_filename = f"resume_{uuid.uuid4().hex[:10]}.docx"
-    safe_filename = sanitize_filename(resume_filename)
-    resume_path = RESUMES_DIR / safe_filename
-    resume_builder.build_word_document(str(resume_path), resume_data, template_id=template_id)
-    preview_html = resume_builder.build_html_preview(resume_data, template_id=template_id)
-
-    resume.preview_html = preview_html
-    resume.file_path = str(resume_path)
-    resume.template_id = template_id
-    resume.updated_at = datetime.utcnow()
-    db.commit()
-
-    return {
-        "status": "success",
-        "preview_html": preview_html,
-        "filename": safe_filename,
-        "template_id": template_id,
-    }
-
-
 @app.get("/api/users/{user_id}/prompt-info", tags=["User"])
 async def get_prompt_info(user_id: int, db: Session = Depends(get_db)):
     """Get user's prompt count and membership tier."""
@@ -955,29 +900,6 @@ async def get_prompt_info(user_id: int, db: Session = Depends(get_db)):
         "max_prompts": max_prompts,
         "membership_tier": user.membership_tier,
         "remaining_prompts": max(0, max_prompts - user.prompt_count),
-    }
-
-
-@app.get("/api/templates", tags=["Templates"])
-async def get_templates():
-    """Get available resume templates"""
-    return {
-        "status": "success",
-        "templates": TEMPLATE_LIST,
-    }
-
-
-@app.get("/api/templates/previews", tags=["Templates"])
-async def get_template_previews():
-    """Return a pre-rendered dummy resume HTML string for each template.
-
-    Used by the frontend template carousel so users can see a realistic
-    full-resume preview before selecting a layout. No authentication required.
-    """
-    builder = ResumeBuilder()
-    return {
-        tmpl["id"]: builder.build_html_preview(DUMMY_CANDIDATE, tmpl["id"])
-        for tmpl in TEMPLATE_LIST
     }
 
 

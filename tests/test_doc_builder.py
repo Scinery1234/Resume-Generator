@@ -1,7 +1,7 @@
 """
 Unit tests for doc_builder.py – ResumeBuilder class.
-Tests cover: Word document generation, HTML preview generation, all 3 layouts,
-edge cases, and template configuration.
+Tests cover: Word document generation, HTML preview generation, layout
+structure, and edge cases.
 """
 import os
 import tempfile
@@ -9,7 +9,7 @@ import pytest
 from pathlib import Path
 from docx import Document
 
-from doc_builder import ResumeBuilder, TEMPLATES, TEMPLATE_LIST, _get_template
+from doc_builder import ResumeBuilder, STYLE
 
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ def tmp_docx(tmp_path):
 def _get_all_text(doc: Document) -> str:
     """
     Extract all text from a Document, including paragraphs inside table cells.
-    Layout B stores content in table cells which doc.paragraphs does not expose.
+    The layout stores content in table cells which doc.paragraphs does not expose.
     """
     parts = [p.text for p in doc.paragraphs]
     for table in doc.tables:
@@ -104,8 +104,7 @@ def _get_all_text(doc: Document) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Word document tests  (default template = "modern", which is Layout B)
-# We use classic for the Layout A-specific structural tests.
+# Word document tests
 # ══════════════════════════════════════════════════════════════════════════════
 
 class TestBuildWordDocument:
@@ -319,277 +318,54 @@ class TestLegacyMethods:
         assert "Dev" in text
 
 
-# ── Template configuration tests ─────────────────────────────────────────────
+# ── Layout structure tests ───────────────────────────────────────────────────
 
-TEMPLATE_IDS = ["modern", "classic", "creative", "minimal", "executive"]
+class TestWordLayout:
+    def test_uses_table(self, builder, tmp_docx):
+        """Content is rendered inside tables (header + two-column body)."""
+        builder.build_word_document(tmp_docx, FULL_CANDIDATE)
+        assert len(Document(tmp_docx).tables) >= 2
 
-
-class TestTemplateConfig:
-    def test_all_five_templates_defined(self):
-        for tid in TEMPLATE_IDS:
-            assert tid in TEMPLATES
-
-    def test_each_template_has_required_keys(self):
-        required = {
-            "heading_color", "rule_color", "muted_color",
-            "body_font", "heading_font",
-            "name_size", "contact_size", "section_size", "body_size",
-            "name_align",
-            "html_heading", "html_rule", "html_muted",
-            "html_name_size", "html_body_size",
-            "html_section_size", "html_contact_size",
-            "layout",
-        }
-        for tid in TEMPLATE_IDS:
-            missing = required - TEMPLATES[tid].keys()
-            assert not missing, f"Template '{tid}' missing keys: {missing}"
-
-    def test_layout_a_templates(self):
-        assert TEMPLATES["classic"]["layout"] == "A"
-        assert TEMPLATES["minimal"]["layout"] == "A"
-
-    def test_layout_b_templates(self):
-        assert TEMPLATES["modern"]["layout"] == "B"
-        assert TEMPLATES["executive"]["layout"] == "B"
-
-    def test_layout_c_templates(self):
-        assert TEMPLATES["creative"]["layout"] == "C"
-
-    def test_layout_b_templates_have_sidebar_keys(self):
-        sidebar_keys = {
-            "html_sidebar_bg", "html_sidebar_text", "html_sidebar_rule",
-            "docx_sidebar_bg_hex", "docx_sidebar_text_rgb", "docx_sidebar_rule_rgb",
-        }
-        for tid in ["modern", "executive"]:
-            missing = sidebar_keys - TEMPLATES[tid].keys()
-            assert not missing, f"Layout B template '{tid}' missing sidebar keys: {missing}"
-
-    def test_layout_c_template_has_header_keys(self):
-        header_keys = {
-            "html_header_bg", "html_header_text",
-            "docx_header_bg_hex", "docx_header_text_rgb",
-        }
-        missing = header_keys - TEMPLATES["creative"].keys()
-        assert not missing, f"Layout C template 'creative' missing header keys: {missing}"
-
-    def test_get_template_returns_modern_by_default(self):
-        assert _get_template(None) is TEMPLATES["modern"]
-        assert _get_template("") is TEMPLATES["modern"]
-
-    def test_get_template_unknown_falls_back_to_modern(self):
-        assert _get_template("unknown-template") is TEMPLATES["modern"]
-
-    def test_get_template_case_insensitive(self):
-        assert _get_template("Modern") is TEMPLATES["modern"]
-        assert _get_template("CLASSIC") is TEMPLATES["classic"]
-
-    def test_template_list_has_five_entries(self):
-        assert len(TEMPLATE_LIST) == 5
-
-    def test_template_list_ids_match_templates(self):
-        list_ids = {t["id"] for t in TEMPLATE_LIST}
-        assert list_ids == set(TEMPLATE_IDS)
-
-    def test_template_list_entries_have_required_fields(self):
-        for entry in TEMPLATE_LIST:
-            assert "id" in entry
-            assert "name" in entry
-            assert "description" in entry
-            assert "layout" in entry
-
-    def test_templates_have_distinct_heading_colors(self):
-        colors = [TEMPLATES[tid]["html_heading"] for tid in TEMPLATE_IDS]
-        assert len(set(colors)) == len(TEMPLATE_IDS), \
-            "All templates should have distinct heading colours"
-
-
-# ── Per-template Word document tests ─────────────────────────────────────────
-
-class TestBuildWordDocumentWithTemplates:
-    @pytest.mark.parametrize("template_id", TEMPLATE_IDS)
-    def test_all_templates_create_file(self, builder, tmp_path, template_id):
-        path = str(tmp_path / f"resume_{template_id}.docx")
-        builder.build_word_document(path, FULL_CANDIDATE, template_id=template_id)
-        assert Path(path).exists()
-        assert Path(path).stat().st_size > 0
-
-    @pytest.mark.parametrize("template_id", TEMPLATE_IDS)
-    def test_all_templates_contain_name(self, builder, tmp_path, template_id):
-        path = str(tmp_path / f"resume_{template_id}.docx")
-        builder.build_word_document(path, FULL_CANDIDATE, template_id=template_id)
-        doc = Document(path)
-        assert "JANE SMITH" in _get_all_text(doc).upper()
-
-    @pytest.mark.parametrize("template_id", TEMPLATE_IDS)
-    def test_all_templates_contain_experience(self, builder, tmp_path, template_id):
-        path = str(tmp_path / f"resume_{template_id}.docx")
-        builder.build_word_document(path, FULL_CANDIDATE, template_id=template_id)
-        doc = Document(path)
-        assert "Senior Software Engineer" in _get_all_text(doc)
-
-    @pytest.mark.parametrize("template_id", TEMPLATE_IDS)
-    def test_all_templates_contain_contact(self, builder, tmp_path, template_id):
-        path = str(tmp_path / f"resume_{template_id}.docx")
-        builder.build_word_document(path, FULL_CANDIDATE, template_id=template_id)
-        doc = Document(path)
-        assert "jane.smith@email.com" in _get_all_text(doc)
-
-    def test_unknown_template_falls_back_gracefully(self, builder, tmp_docx):
-        """Unknown template IDs should fall back to 'modern' without raising."""
-        builder.build_word_document(tmp_docx, MINIMAL_CANDIDATE, template_id="nonexistent")
-        assert Path(tmp_docx).exists()
-
-    def test_classic_uses_georgia_font(self, builder, tmp_path):
-        path = str(tmp_path / "classic.docx")
-        builder.build_word_document(path, FULL_CANDIDATE, template_id="classic")
-        doc = Document(path)
-        assert doc.styles["Normal"].font.name == "Georgia"
-
-    def test_layout_a_name_paragraph_alignment(self, builder, tmp_path):
-        """Classic (Layout A) centres the name; minimal (Layout A) left-aligns it."""
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-
-        path_c = str(tmp_path / "classic.docx")
-        builder.build_word_document(path_c, FULL_CANDIDATE, template_id="classic")
-        doc_c = Document(path_c)
-        assert doc_c.paragraphs[0].alignment == WD_ALIGN_PARAGRAPH.CENTER
-
-        path_m = str(tmp_path / "minimal.docx")
-        builder.build_word_document(path_m, FULL_CANDIDATE, template_id="minimal")
-        doc_m = Document(path_m)
-        assert doc_m.paragraphs[0].alignment in (WD_ALIGN_PARAGRAPH.LEFT, None)
-
-    def test_layout_b_uses_table(self, builder, tmp_path):
-        """Modern and Executive (Layout B) render their content inside a table."""
-        for tid in ["modern", "executive"]:
-            path = str(tmp_path / f"{tid}.docx")
-            builder.build_word_document(path, FULL_CANDIDATE, template_id=tid)
-            doc = Document(path)
-            assert len(doc.tables) >= 1, f"{tid} should have at least one table"
-
-    def test_layout_b_sidebar_contains_contact(self, builder, tmp_path):
+    def test_sidebar_contains_contact(self, builder, tmp_docx):
         """Sidebar cell (column 0) should contain contact information."""
-        path = str(tmp_path / "modern.docx")
-        builder.build_word_document(path, FULL_CANDIDATE, template_id="modern")
-        doc = Document(path)
+        builder.build_word_document(tmp_docx, FULL_CANDIDATE)
+        doc = Document(tmp_docx)
         # doc.tables[0] is the full-width header table; doc.tables[1] is the body table
         sidebar_text = " ".join(p.text for p in doc.tables[1].cell(0, 0).paragraphs)
         assert "jane.smith@email.com" in sidebar_text
 
-    def test_layout_b_main_contains_experience(self, builder, tmp_path):
+    def test_main_contains_experience(self, builder, tmp_docx):
         """Main cell (column 1) should contain work experience."""
-        path = str(tmp_path / "modern.docx")
-        builder.build_word_document(path, FULL_CANDIDATE, template_id="modern")
-        doc = Document(path)
+        builder.build_word_document(tmp_docx, FULL_CANDIDATE)
+        doc = Document(tmp_docx)
         main_text = " ".join(p.text for p in doc.tables[1].cell(0, 1).paragraphs)
         assert "Senior Software Engineer" in main_text
 
-    def test_layout_c_name_is_in_first_paragraph(self, builder, tmp_path):
-        """Creative (Layout C) renders the name inside the full-width header table cell."""
-        path = str(tmp_path / "creative.docx")
-        builder.build_word_document(path, FULL_CANDIDATE, template_id="creative")
-        doc = Document(path)
-        # Name is in the first table cell (full-width header band, not a top-level paragraph)
-        header_text = " ".join(p.text for p in doc.tables[0].cell(0, 0).paragraphs)
-        assert "JANE SMITH" in header_text
+    def test_uses_calibri(self, builder, tmp_docx):
+        builder.build_word_document(tmp_docx, FULL_CANDIDATE)
+        assert Document(tmp_docx).styles["Normal"].font.name == STYLE["body_font"]
+
+    def test_bytes_match_file_content(self, builder):
+        from io import BytesIO
+        doc = Document(BytesIO(builder.build_word_document_bytes(FULL_CANDIDATE)))
+        assert "JANE SMITH" in _get_all_text(doc).upper()
 
 
-# ── Per-template HTML tests ───────────────────────────────────────────────────
+class TestHtmlLayout:
+    def test_has_sidebar_and_main(self, builder):
+        result = builder.build_html_preview(FULL_CANDIDATE)
+        assert 'class="sidebar"' in result
+        assert 'class="main"' in result
 
-class TestBuildHtmlPreviewWithTemplates:
-    @pytest.mark.parametrize("template_id", TEMPLATE_IDS)
-    def test_all_templates_produce_valid_html(self, builder, template_id):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id=template_id)
-        assert "<!DOCTYPE html>" in result
-        assert "JANE SMITH" in result.upper()
-
-    @pytest.mark.parametrize("template_id", TEMPLATE_IDS)
-    def test_all_templates_contain_heading_color(self, builder, template_id):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id=template_id)
-        expected_color = TEMPLATES[template_id]["html_heading"]
-        assert expected_color in result
-
-    def test_modern_html_uses_sans_font(self, builder):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id="modern")
-        assert "Calibri" in result
-
-    def test_classic_html_uses_serif_font(self, builder):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id="classic")
-        assert "Georgia" in result
-
-    def test_creative_html_has_purple_heading(self, builder):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id="creative")
-        assert "#6b21a8" in result
-
-    def test_minimal_html_has_light_rule(self, builder):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id="minimal")
-        assert "#d1d5db" in result
-
-    def test_unknown_template_falls_back_gracefully(self, builder):
-        result = builder.build_html_preview(MINIMAL_CANDIDATE, template_id="unknown")
-        assert "<!DOCTYPE html>" in result
-
-    # ── Layout A structural tests ───────────────────────────────────────────
-    def test_classic_html_name_center_aligned(self, builder):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id="classic")
-        assert "text-align: center" in result
-
-    def test_minimal_html_name_left_aligned(self, builder):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id="minimal")
-        assert "text-align: left" in result
-
-    # ── Layout B structural tests ───────────────────────────────────────────
-    def test_layout_b_html_has_sidebar_div(self, builder):
-        for tid in ["modern", "executive"]:
-            result = builder.build_html_preview(FULL_CANDIDATE, template_id=tid)
-            assert 'class="sidebar"' in result, f"{tid} should have sidebar div"
-
-    def test_layout_b_html_has_main_div(self, builder):
-        for tid in ["modern", "executive"]:
-            result = builder.build_html_preview(FULL_CANDIDATE, template_id=tid)
-            assert 'class="main"' in result, f"{tid} should have main div"
-
-    def test_layout_b_html_sidebar_contains_contact(self, builder):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id="modern")
-        sidebar_start = result.find('class="sidebar"')
-        main_start    = result.find('class="main"')
-        sidebar_block = result[sidebar_start:main_start]
+    def test_sidebar_contains_contact(self, builder):
+        result = builder.build_html_preview(FULL_CANDIDATE)
+        sidebar_block = result[result.find('class="sidebar"'):result.find('class="main"')]
         assert "jane.smith@email.com" in sidebar_block
 
-    def test_layout_b_html_main_contains_experience(self, builder):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id="executive")
-        main_start = result.find('class="main"')
-        main_block  = result[main_start:]
-        assert "Senior Software Engineer" in main_block
+    def test_main_contains_experience(self, builder):
+        result = builder.build_html_preview(FULL_CANDIDATE)
+        assert "Senior Software Engineer" in result[result.find('class="main"'):]
 
-    def test_modern_html_has_navy_sidebar(self, builder):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id="modern")
-        assert "#1a375e" in result   # sidebar background
-
-    def test_executive_html_has_amber_rule(self, builder):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id="executive")
-        assert "#b45309" in result   # amber-gold sidebar rule
-
-    # ── Layout C structural tests ───────────────────────────────────────────
-    def test_layout_c_html_has_header_band(self, builder):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id="creative")
-        assert 'class="header-band"' in result
-
-    def test_layout_c_html_has_page_body(self, builder):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id="creative")
-        assert 'class="page-body"' in result
-
-    def test_layout_c_html_name_in_header_band(self, builder):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id="creative")
-        band_start = result.find('class="header-band"')
-        body_start = result.find('class="page-body"')
-        band_block = result[band_start:body_start]
-        assert "JANE SMITH" in band_block
-
-    def test_creative_html_has_purple_header_bg(self, builder):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id="creative")
-        assert "#6b21a8" in result   # header band background
-
-    def test_layout_c_html_has_teal_rule(self, builder):
-        result = builder.build_html_preview(FULL_CANDIDATE, template_id="creative")
-        assert "#0891b2" in result   # section rule colour
+    def test_has_navy_sidebar(self, builder):
+        result = builder.build_html_preview(FULL_CANDIDATE)
+        assert STYLE["html_sidebar_bg"] in result

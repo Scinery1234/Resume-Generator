@@ -196,7 +196,7 @@ const LandingPage = () => {
                                 price: '$0',
                                 period: 'forever',
                                 desc: 'Perfect for getting started.',
-                                features: ['1 resume', 'Basic template', 'Word export', 'Email support'],
+                                features: ['1 resume', 'Word export', 'Email support'],
                                 highlighted: false,
                             },
                             {
@@ -204,7 +204,7 @@ const LandingPage = () => {
                                 price: '$9',
                                 period: 'per month',
                                 desc: 'For serious job seekers.',
-                                features: ['Unlimited resumes', 'All templates', 'AI enhancements', 'Priority support'],
+                                features: ['Unlimited resumes', 'AI enhancements', 'Priority support'],
                                 highlighted: true,
                             },
                             {
