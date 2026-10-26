@@ -429,31 +429,41 @@ async def generate_from_documents(
         logger.error("OpenAI generation failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"AI generation failed: {exc}")
 
-    # Build the .docx
-    resume_builder = ResumeBuilder()
-    resume_filename = f"resume_{uuid.uuid4().hex[:10]}.docx"
-    # Sanitize filename (though UUID should be safe, this is defensive)
-    safe_filename = sanitize_filename(resume_filename)
-    resume_path = RESUMES_DIR / safe_filename
-    resume_builder.build_word_document(str(resume_path), resume_data, template_id=template)
+    # Build the .docx and HTML preview. Unhandled exceptions here would bypass
+    # the CORS middleware and reach the browser as an opaque network error.
+    try:
+        resume_builder = ResumeBuilder()
+        resume_filename = f"resume_{uuid.uuid4().hex[:10]}.docx"
+        # Sanitize filename (though UUID should be safe, this is defensive)
+        safe_filename = sanitize_filename(resume_filename)
+        resume_path = RESUMES_DIR / safe_filename
+        resume_builder.build_word_document(str(resume_path), resume_data, template_id=template)
 
-    # Build the HTML preview
-    preview_html = resume_builder.build_html_preview(resume_data, template_id=template)
+        # Build the HTML preview
+        preview_html = resume_builder.build_html_preview(resume_data, template_id=template)
+    except Exception as exc:
+        logger.exception("Resume document build failed")
+        raise HTTPException(status_code=500, detail=f"Failed to build resume document: {exc}")
 
     # Save the resume — resume_id is required for template switching and edits.
-    resume_record = Resume(
-        user_id=user_id,  # NULL for guest resumes
-        name=resume_data.get("name", "Untitled Resume"),
-        file_path=str(resume_path),
-        contact_info=json.dumps(resume_data.get("contact", {})),
-        resume_data=json.dumps(resume_data),
-        preview_html=preview_html,
-        template_id=template,
-    )
-    db.add(resume_record)
-    db.commit()
-    db.refresh(resume_record)
-    resume_id = resume_record.id
+    try:
+        resume_record = Resume(
+            user_id=user_id,  # NULL for guest resumes
+            name=resume_data.get("name", "Untitled Resume"),
+            file_path=str(resume_path),
+            contact_info=json.dumps(resume_data.get("contact", {})),
+            resume_data=json.dumps(resume_data),
+            preview_html=preview_html,
+            template_id=template,
+        )
+        db.add(resume_record)
+        db.commit()
+        db.refresh(resume_record)
+        resume_id = resume_record.id
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Saving generated resume failed")
+        raise HTTPException(status_code=500, detail=f"Failed to save resume: {exc}")
 
     logger.info("Resume generated: %s (name: %s)", safe_filename, resume_data.get("name", "unknown"))
     # Return a flat response — NOT wrapped in standardize_response — so the

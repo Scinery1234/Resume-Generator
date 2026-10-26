@@ -712,7 +712,7 @@ const WizardPage = () => {
             setActiveTemplate(template);
             setResult({ ...data, template });
         } catch (err) {
-            const msg = err.response?.data?.detail || 'Generation failed. Please try again.';
+            const msg = err.response?.data?.detail || err.message || 'Generation failed. Please try again.';
             setError(msg);
             console.error('Resume generation error:', err);
         } finally {
