@@ -1,5 +1,5 @@
 /**
- * Tests for the resumeAPI, authAPI, and templateAPI service layer.
+ * Tests for the resumeAPI and authAPI service layer.
  * We mock the entire services/api module so no real HTTP calls are made.
  */
 
@@ -16,12 +16,9 @@ jest.mock('../services/api', () => ({
         downloadByFilename: jest.fn(),
         delete:             jest.fn(),
     },
-    templateAPI: {
-        getAll: jest.fn(),
-    },
 }));
 
-import { resumeAPI, authAPI, templateAPI } from '../services/api';
+import { resumeAPI, authAPI } from '../services/api';
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -138,20 +135,5 @@ describe('resumeAPI.getAll', () => {
         const result = await resumeAPI.getAll(1);
         expect(result.status).toBe('success');
         expect(Array.isArray(result.resumes)).toBe(true);
-    });
-});
-
-// ── templateAPI ──────────────────────────────────────────────────────────────
-
-describe('templateAPI.getAll', () => {
-    test('resolves with template list', async () => {
-        templateAPI.getAll.mockResolvedValueOnce({
-            status: 'success',
-            templates: [{ id: 1, name: 'Modern', description: 'Clean' }],
-        });
-        const result = await templateAPI.getAll();
-        expect(result.status).toBe('success');
-        expect(Array.isArray(result.templates)).toBe(true);
-        expect(result.templates[0].name).toBe('Modern');
     });
 });

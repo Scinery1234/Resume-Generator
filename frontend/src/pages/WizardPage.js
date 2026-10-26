@@ -40,7 +40,7 @@ function GenerationModeBadge({ mode }) {
 const GUEST_MAX_EDITS = 3;
 const PAID_MAX_EDITS  = 50;
 
-function ResultView({ result, onReset, onUpdate, activeTemplate, switchingTemplate, onSwitchTemplate }) {
+function ResultView({ result, onReset, onUpdate }) {
     const [downloading, setDownloading] = useState(false);
     const [downloadError, setDownloadError] = useState('');
     const [editPrompt, setEditPrompt] = useState('');
@@ -49,7 +49,6 @@ function ResultView({ result, onReset, onUpdate, activeTemplate, switchingTempla
     const [promptInfo, setPromptInfo] = useState(null);
     const [isEditingInline, setIsEditingInline] = useState(false);
     const [jsonText, setJsonText] = useState(() => JSON.stringify(result.data || {}, null, 2));
-    const [templateError, setTemplateError] = useState('');
 
     const userId = localStorage.getItem('userId');
     const token  = localStorage.getItem('token');
@@ -84,7 +83,7 @@ function ResultView({ result, onReset, onUpdate, activeTemplate, switchingTempla
             }
             const blob = await resumeAPI.download(result.resume_id);
             const safeName = (result.data?.name || 'resume').replace(/\s+/g, '_');
-            downloadBlob(blob, `${safeName}_${activeTemplate}.docx`);
+            downloadBlob(blob, `${safeName}.docx`);
         } catch (err) {
             setDownloadError(err.message || 'Download failed. Please try again.');
         } finally {
@@ -146,16 +145,6 @@ function ResultView({ result, onReset, onUpdate, activeTemplate, switchingTempla
         }
     };
 
-    const handleTemplateSwitchClick = async (templateId) => {
-        setTemplateError('');
-        try {
-            await onSwitchTemplate(templateId);
-        } catch (err) {
-            setTemplateError(err?.message || 'Failed to apply template. Please try again.');
-        }
-    };
-
-
     return (
         <div className="gen-result">
             <div className="gen-result__header">
@@ -168,32 +157,6 @@ function ResultView({ result, onReset, onUpdate, activeTemplate, switchingTempla
                     </p>
                 </div>
             </div>
-
-            {/* ── Template switcher ── */}
-            {result.resume_id && (
-                <div className="gen-template-switcher">
-                    <span className="gen-template-switcher__label">Template:</span>
-                    {TEMPLATES.map(t => (
-                        <button
-                            key={t.id}
-                            type="button"
-                            className={`gen-template-pill${activeTemplate === t.id ? ' gen-template-pill--active' : ''}`}
-                            onClick={() => handleTemplateSwitchClick(t.id)}
-                            disabled={switchingTemplate}
-                            style={{ '--pill-color': t.preview.headingColor }}
-                            aria-pressed={activeTemplate === t.id}
-                        >
-                            <span className="gen-template-pill__dot" style={{ background: t.preview.headingColor }} />
-                            {t.name}
-                            {switchingTemplate && activeTemplate !== t.id && ' '}
-                        </button>
-                    ))}
-                    {switchingTemplate && (
-                        <span className="gen-template-switcher__loading">Applying…</span>
-                    )}
-                </div>
-            )}
-            {templateError && <div className="gen-error" role="alert">{templateError}</div>}
 
             {/* Edit-quota banner */}
             {promptInfo && (
@@ -311,352 +274,6 @@ function ResultView({ result, onReset, onUpdate, activeTemplate, switchingTempla
     );
 }
 
-// ── Template definitions ──────────────────────────────────────────────────────
-// Three structural layouts:
-//   A – single column  (classic, minimal)
-//   B – two-column sidebar  (modern, executive)
-//   C – full-width header band  (creative)
-const TEMPLATES = [
-    {
-        id: 'modern',
-        name: 'Modern',
-        description: 'Navy sidebar with contact & skills panel — polished and professional.',
-        layout: 'B',
-        preview: {
-            headingColor: '#1a375e',
-            ruleColor:    '#1a375e',
-            mutedColor:   '#445566',
-            fontFamily:   "Calibri, 'Segoe UI', Arial, sans-serif",
-            nameAlign:    'left',
-            namePx:       13,
-            sidebarBg:    '#1a375e',
-            sidebarText:  '#e8f0f8',
-            sidebarRule:  '#4a7aae',
-        },
-    },
-    {
-        id: 'classic',
-        name: 'Classic',
-        description: 'Traditional serif single-column — timeless and formal.',
-        layout: 'A',
-        preview: {
-            headingColor: '#1a1a1a',
-            ruleColor:    '#333333',
-            mutedColor:   '#555555',
-            fontFamily:   "Georgia, 'Times New Roman', serif",
-            nameAlign:    'center',
-            namePx:       13,
-        },
-    },
-    {
-        id: 'creative',
-        name: 'Creative',
-        description: 'Purple header band with teal accents — bold and contemporary.',
-        layout: 'C',
-        preview: {
-            headingColor: '#6b21a8',
-            ruleColor:    '#0891b2',
-            mutedColor:   '#4b5563',
-            fontFamily:   "Calibri, 'Segoe UI', Arial, sans-serif",
-            nameAlign:    'left',
-            namePx:       14,
-            headerBg:     '#6b21a8',
-            headerText:   '#ffffff',
-        },
-    },
-    {
-        id: 'minimal',
-        name: 'Minimal',
-        description: 'Light-gray rules, single column — understated and elegant.',
-        layout: 'A',
-        preview: {
-            headingColor: '#374151',
-            ruleColor:    '#d1d5db',
-            mutedColor:   '#6b7280',
-            fontFamily:   "Calibri, 'Segoe UI', Arial, sans-serif",
-            nameAlign:    'left',
-            namePx:       14,
-        },
-    },
-    {
-        id: 'executive',
-        name: 'Executive',
-        description: 'Charcoal sidebar with amber-gold rules — sharp and authoritative.',
-        layout: 'B',
-        preview: {
-            headingColor: '#1c1c2e',
-            ruleColor:    '#b45309',
-            mutedColor:   '#525252',
-            fontFamily:   "Calibri, 'Segoe UI', Arial, sans-serif",
-            nameAlign:    'left',
-            namePx:       13,
-            sidebarBg:    '#1c1c2e',
-            sidebarText:  '#f0f0f0',
-            sidebarRule:  '#b45309',
-        },
-    },
-];
-
-// ── Mini resume preview helpers ───────────────────────────────────────────────
-
-/** Section heading + rule used inside Layout A and C mini previews. */
-function PreviewSection({ label, p, children }) {
-    return (
-        <div style={{ marginBottom: 6 }}>
-            <div style={{
-                fontFamily: p.fontFamily, fontSize: 6.5, fontWeight: 700,
-                color: p.headingColor, letterSpacing: '0.07em', marginBottom: 2,
-            }}>
-                {label}
-            </div>
-            <div style={{ borderTop: `1px solid ${p.ruleColor}`, marginBottom: 3 }} />
-            {children}
-        </div>
-    );
-}
-
-/** Section heading + rule used inside the Layout B sidebar. */
-function SidebarSection({ label, p, children }) {
-    return (
-        <div style={{ marginBottom: 8 }}>
-            <div style={{
-                fontSize: 6, fontWeight: 700, color: p.sidebarText,
-                letterSpacing: '0.1em', marginBottom: 2,
-            }}>
-                {label}
-            </div>
-            <div style={{ borderTop: `1px solid ${p.sidebarRule}`, marginBottom: 4 }} />
-            {children}
-        </div>
-    );
-}
-
-/** Layout A mini preview – single column */
-function PreviewMiniA({ p }) {
-    const body  = { fontFamily: p.fontFamily, fontSize: 7.5, color: '#2a2a2a', lineHeight: 1.35 };
-    const muted = { fontFamily: p.fontFamily, fontSize: 6.5, fontStyle: 'italic', color: p.mutedColor };
-    const bold  = { fontFamily: p.fontFamily, fontSize: 8, fontWeight: 700, color: p.headingColor };
-
-    return (
-        <div style={{ padding: '12px 12px 8px', background: '#fff', fontFamily: p.fontFamily }}>
-            <div style={{ fontSize: p.namePx, fontWeight: 700, color: p.headingColor,
-                textAlign: p.nameAlign, letterSpacing: '0.04em', marginBottom: 2 }}>
-                ALEX JOHNSON
-            </div>
-            <div style={{ fontSize: 6.5, color: p.mutedColor, textAlign: p.nameAlign, marginBottom: 5 }}>
-                0412 345 678 · alex@email.com · Sydney NSW
-            </div>
-            <div style={{ borderTop: `1.5px solid ${p.ruleColor}`, marginBottom: 6 }} />
-
-            <PreviewSection label="PROFESSIONAL SUMMARY" p={p}>
-                <div style={{ ...body }}>
-                    Results-driven engineer with 6+ years delivering scalable web applications
-                    and leading high-performing teams.
-                </div>
-            </PreviewSection>
-
-            <PreviewSection label="WORK EXPERIENCE" p={p}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
-                    <span style={bold}>Senior Software Engineer</span>
-                    <span style={{ fontSize: 6, color: p.mutedColor }}>2021 – Present</span>
-                </div>
-                <div style={{ ...muted, marginBottom: 3 }}>Atlassian  |  Sydney NSW</div>
-                <div style={{ ...body, paddingLeft: 7, marginBottom: 1 }}>• Led microservices platform for 2M+ users</div>
-                <div style={{ ...body, paddingLeft: 7, marginBottom: 4 }}>• Reduced API response time by 40%</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
-                    <span style={{ ...bold, fontSize: 7.5 }}>Software Engineer</span>
-                    <span style={{ fontSize: 6, color: p.mutedColor }}>2018 – 2021</span>
-                </div>
-                <div style={{ ...muted, marginBottom: 3 }}>Canva  |  Sydney NSW</div>
-                <div style={{ ...body, paddingLeft: 7 }}>• Built real-time collaboration for 5M+ users</div>
-            </PreviewSection>
-
-            <PreviewSection label="EDUCATION" p={p}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
-                    <span style={{ ...bold, fontSize: 7.5 }}>Bachelor of Computer Science</span>
-                    <span style={{ fontSize: 6, color: p.mutedColor }}>2018</span>
-                </div>
-                <div style={{ ...muted }}>University of New South Wales</div>
-            </PreviewSection>
-
-            <PreviewSection label="KEY SKILLS" p={p}>
-                <div style={{ ...body }}>Python · TypeScript · React · AWS · Docker</div>
-            </PreviewSection>
-        </div>
-    );
-}
-
-/** Layout B mini preview – two-column sidebar with full-width header */
-function PreviewMiniB({ p }) {
-    const sbItem = { fontSize: 6.5, color: p.sidebarText, marginBottom: 2, lineHeight: 1.3, wordBreak: 'break-all' };
-    const body   = { fontFamily: p.fontFamily, fontSize: 7.5, color: '#2a2a2a', lineHeight: 1.35 };
-    const muted  = { fontFamily: p.fontFamily, fontSize: 6.5, fontStyle: 'italic', color: p.mutedColor };
-    const bold   = { fontFamily: p.fontFamily, fontSize: 8, fontWeight: 700, color: p.headingColor };
-
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', background: '#fff', fontFamily: p.fontFamily, minHeight: '100%' }}>
-            {/* ── Full-width name header ── */}
-            <div style={{ background: p.sidebarBg, padding: '8px 10px 7px 9px', flexShrink: 0 }}>
-                <div style={{ fontSize: p.namePx, fontWeight: 700, color: p.sidebarText,
-                    letterSpacing: '0.03em', lineHeight: 1.1 }}>
-                    ALEX JOHNSON
-                </div>
-                <div style={{ fontSize: 6.5, color: p.sidebarText, opacity: 0.82,
-                    marginTop: 3, letterSpacing: '0.04em' }}>
-                    Senior Software Engineer  ·  Atlassian  ·  Sydney NSW
-                </div>
-            </div>
-
-            {/* ── Body row ── */}
-            <div style={{ display: 'flex', flex: 1 }}>
-            {/* ── Sidebar ── */}
-            <div style={{ width: '33%', background: p.sidebarBg, padding: '7px 7px 12px 9px', flexShrink: 0, overflow: 'hidden' }}>
-                <SidebarSection label="CONTACT" p={p}>
-                    <div style={sbItem}>0412 345 678</div>
-                    <div style={sbItem}>alex@email.com</div>
-                    <div style={sbItem}>Sydney NSW</div>
-                </SidebarSection>
-
-                <SidebarSection label="KEY SKILLS" p={p}>
-                    {['Python', 'TypeScript', 'React', 'AWS', 'Docker'].map(s => (
-                        <div key={s} style={sbItem}>  {s}</div>
-                    ))}
-                </SidebarSection>
-
-                <SidebarSection label="EDUCATION" p={p}>
-                    <div style={{ ...sbItem, fontWeight: 600 }}>B. Computer Science</div>
-                    <div style={{ ...sbItem, fontStyle: 'italic', opacity: 0.85, fontSize: 6 }}>UNSW · 2018</div>
-                </SidebarSection>
-            </div>
-
-            {/* ── Main ── */}
-            <div style={{ flex: 1, padding: '7px 9px 8px 8px', minWidth: 0 }}>
-                <div style={{ marginBottom: 6 }}>
-                    <div style={{ fontSize: 6.5, fontWeight: 700, color: p.headingColor, letterSpacing: '0.07em', marginBottom: 2 }}>
-                        PROFESSIONAL SUMMARY
-                    </div>
-                    <div style={{ borderTop: `1px solid ${p.ruleColor}`, marginBottom: 3 }} />
-                    <div style={{ ...body }}>Results-driven engineer with 6+ years delivering scalable web applications.</div>
-                </div>
-
-                <div>
-                    <div style={{ fontSize: 6.5, fontWeight: 700, color: p.headingColor, letterSpacing: '0.07em', marginBottom: 2 }}>
-                        WORK EXPERIENCE
-                    </div>
-                    <div style={{ borderTop: `1px solid ${p.ruleColor}`, marginBottom: 3 }} />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
-                        <span style={bold}>Senior Software Engineer</span>
-                        <span style={{ fontSize: 6, color: p.mutedColor }}>2021–Present</span>
-                    </div>
-                    <div style={{ ...muted, marginBottom: 2 }}>Atlassian  |  Sydney NSW</div>
-                    <div style={{ ...body, paddingLeft: 7, marginBottom: 1 }}>• Led microservices for 2M+ users</div>
-                    <div style={{ ...body, paddingLeft: 7, marginBottom: 4 }}>• Reduced API time by 40%</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
-                        <span style={{ ...bold, fontSize: 7.5 }}>Software Engineer</span>
-                        <span style={{ fontSize: 6, color: p.mutedColor }}>2018–2021</span>
-                    </div>
-                    <div style={{ ...muted, marginBottom: 2 }}>Canva  |  Sydney NSW</div>
-                    <div style={{ ...body, paddingLeft: 7 }}>• Built real-time collaboration for 5M+ users</div>
-                </div>
-            </div>
-            </div>{/* end body-row */}
-        </div>
-    );
-}
-
-/** Layout C mini preview – full-width header band */
-function PreviewMiniC({ p }) {
-    const body  = { fontFamily: p.fontFamily, fontSize: 7.5, color: '#2a2a2a', lineHeight: 1.35 };
-    const muted = { fontFamily: p.fontFamily, fontSize: 6.5, fontStyle: 'italic', color: p.mutedColor };
-    const bold  = { fontFamily: p.fontFamily, fontSize: 8, fontWeight: 700, color: p.headingColor };
-
-    return (
-        <div style={{ background: '#fff', fontFamily: p.fontFamily }}>
-            {/* ── Header band ── */}
-            <div style={{ background: p.headerBg, padding: '10px 12px 8px' }}>
-                <div style={{ fontSize: p.namePx, fontWeight: 700, color: p.headerText,
-                    letterSpacing: '0.04em', marginBottom: 3 }}>
-                    ALEX JOHNSON
-                </div>
-                <div style={{ fontSize: 6.5, color: 'rgba(255,255,255,0.85)' }}>
-                    0412 345 678 · alex@email.com · Sydney NSW
-                </div>
-            </div>
-
-            {/* ── Body ── */}
-            <div style={{ padding: '8px 12px 8px' }}>
-                <PreviewSection label="PROFESSIONAL SUMMARY" p={p}>
-                    <div style={{ ...body }}>
-                        Results-driven engineer with 6+ years delivering scalable web applications
-                        and leading high-performing teams.
-                    </div>
-                </PreviewSection>
-
-                <PreviewSection label="WORK EXPERIENCE" p={p}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
-                        <span style={bold}>Senior Software Engineer</span>
-                        <span style={{ fontSize: 6, color: p.mutedColor }}>2021 – Present</span>
-                    </div>
-                    <div style={{ ...muted, marginBottom: 3 }}>Atlassian  |  Sydney NSW</div>
-                    <div style={{ ...body, paddingLeft: 7, marginBottom: 1 }}>• Led microservices for 2M+ daily users</div>
-                    <div style={{ ...body, paddingLeft: 7, marginBottom: 4 }}>• Reduced API response time by 40%</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
-                        <span style={{ ...bold, fontSize: 7.5 }}>Software Engineer</span>
-                        <span style={{ fontSize: 6, color: p.mutedColor }}>2018 – 2021</span>
-                    </div>
-                    <div style={{ ...muted, marginBottom: 3 }}>Canva  |  Sydney NSW</div>
-                    <div style={{ ...body, paddingLeft: 7 }}>• Built real-time collaboration for 5M+ users</div>
-                </PreviewSection>
-
-                <PreviewSection label="KEY SKILLS" p={p}>
-                    <div style={{ ...body }}>Python · TypeScript · React · AWS · Docker</div>
-                </PreviewSection>
-            </div>
-        </div>
-    );
-}
-
-/** Dispatch to the correct mini preview component based on template layout. */
-function TemplatePreviewMini({ t }) {
-    if (t.layout === 'B') return <PreviewMiniB p={t.preview} />;
-    if (t.layout === 'C') return <PreviewMiniC p={t.preview} />;
-    return <PreviewMiniA p={t.preview} />;
-}
-
-// ── Template carousel (shown before generation) ────────────────────────────
-function TemplateCarousel({ selected, onChange }) {
-    return (
-        <div className="gen-panel gen-panel--carousel">
-            <h2 className="gen-panel__title">
-                <span className="gen-panel__icon">🎨</span>
-                Resume Template
-                <span className="gen-panel__hint">click to choose a layout</span>
-            </h2>
-            <div className="gen-carousel">
-                {TEMPLATES.map(t => (
-                    <button
-                        key={t.id}
-                        type="button"
-                        className={`gen-carousel-card${selected === t.id ? ' gen-carousel-card--active' : ''}`}
-                        onClick={() => onChange(t.id)}
-                        aria-pressed={selected === t.id}
-                        style={{ '--card-accent': t.preview.headingColor }}
-                    >
-                        <div className="gen-carousel-preview">
-                            <TemplatePreviewMini t={t} />
-                        </div>
-                        <div className="gen-carousel-footer">
-                            <div className="gen-carousel-dot" style={{ background: t.preview.headingColor }} />
-                            <span className="gen-carousel-name">{t.name}</span>
-                            {selected === t.id && <span className="gen-carousel-check">✓</span>}
-                        </div>
-                    </button>
-                ))}
-            </div>
-        </div>
-    );
-}
-
 // ── Main generator page ───────────────────────────────────────────────────────
 const WizardPage = () => {
     const navigate      = useNavigate();
@@ -664,13 +281,10 @@ const WizardPage = () => {
     const [files, setFiles]             = useState([]);
     const [jobDesc, setJobDesc]         = useState('');
     const [additionalInfo, setAdditionalInfo] = useState('');
-    const [template, setTemplate]       = useState('modern');
     const [isDragging, setIsDragging]     = useState(false);
     const [loading, setLoading]           = useState(false);
     const [error, setError]               = useState('');
     const [result, setResult]             = useState(null);
-    const [activeTemplate, setActiveTemplate]     = useState('modern');
-    const [switchingTemplate, setSwitchingTemplate] = useState(false);
 
     // ── File handling ────────────────────────────────────────────────────────
     const addFiles = useCallback((newFiles) => {
@@ -708,45 +322,14 @@ const WizardPage = () => {
             const savedToken = localStorage.getItem('token');
             const savedUserId = localStorage.getItem('userId');
             const activeUserId = (savedToken && savedUserId) ? parseInt(savedUserId, 10) : null;
-            const data = await resumeAPI.generate(files, jobDesc, additionalInfo, activeUserId, template);
-            setActiveTemplate(template);
-            setResult({ ...data, template });
+            const data = await resumeAPI.generate(files, jobDesc, additionalInfo, activeUserId);
+            setResult(data);
         } catch (err) {
-            const msg = err.response?.data?.detail || 'Generation failed. Please try again.';
+            const msg = err.response?.data?.detail || err.message || 'Generation failed. Please try again.';
             setError(msg);
             console.error('Resume generation error:', err);
         } finally {
             setLoading(false);
-        }
-    };
-
-    // ── Template switching — lives in the parent so setResult is called directly
-    const handleSwitchTemplate = async (templateId) => {
-        if (!result || switchingTemplate) return;
-        if (templateId === activeTemplate) return;
-        if (!result.resume_id) {
-            throw new Error('Template switching is unavailable — please regenerate your resume.');
-        }
-        const userId = localStorage.getItem('userId');
-        const isGuest = !localStorage.getItem('token') || !userId;
-        setSwitchingTemplate(true);
-        try {
-            const response = await resumeAPI.switchTemplate(
-                result.resume_id,
-                templateId,
-                isGuest ? null : userId,
-            );
-            setActiveTemplate(templateId);
-            setResult(prev => ({
-                ...prev,
-                preview_html: response.preview_html,
-                filename:     response.filename,
-            }));
-        } catch (err) {
-            console.error('Template switch failed:', err);
-            throw err;
-        } finally {
-            setSwitchingTemplate(false);
         }
     };
 
@@ -773,9 +356,6 @@ const WizardPage = () => {
                     result={result}
                     onReset={() => setResult(null)}
                     onUpdate={handleResultUpdate}
-                    activeTemplate={activeTemplate}
-                    switchingTemplate={switchingTemplate}
-                    onSwitchTemplate={handleSwitchTemplate}
                 />
             </div>
         );
@@ -906,9 +486,6 @@ const WizardPage = () => {
                     Tip: Include specific examples, achievements, or responses to selection criteria that directly relate to the job description.
                 </p>
             </div>
-
-            {/* Template Carousel */}
-            <TemplateCarousel selected={template} onChange={setTemplate} />
 
             {/* Error */}
             {error && (

@@ -208,8 +208,27 @@ describe('API error handling', () => {
         );
     });
 
-    test('shows generic error when no response detail', async () => {
-        resumeAPI.generate.mockRejectedValueOnce(new Error('Network Error'));
+    test('shows the error message when no response detail', async () => {
+        resumeAPI.generate.mockRejectedValueOnce(new Error('Cannot reach backend'));
+        renderPage();
+
+        const fileInput = document.querySelector('input[type="file"]');
+        const file = new File(['content'], 'cv.txt', { type: 'text/plain' });
+        await userEvent.upload(fileInput, file);
+
+        await userEvent.type(
+            screen.getByPlaceholderText(/paste the full job description/i),
+            'Software engineer role'
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: /generate my resume/i }));
+        await waitFor(() =>
+            expect(screen.getByRole('alert')).toHaveTextContent(/cannot reach backend/i)
+        );
+    });
+
+    test('shows generic error when the error has no message', async () => {
+        resumeAPI.generate.mockRejectedValueOnce(new Error(''));
         renderPage();
 
         const fileInput = document.querySelector('input[type="file"]');
