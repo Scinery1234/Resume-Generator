@@ -173,3 +173,14 @@ def test_unrecoverable_error_says_why(client):
         assert "Details:" in r.json()["detail"] and "max_tokens: too large" in r.json()["detail"]
     finally:
         MockAnthropic.reject = None
+
+
+def test_out_of_credit_stops_at_once(client):
+    MockAnthropic.requests.clear()
+    MockAnthropic.reject = lambda body, h: "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."
+    try:
+        r = _start(client)
+        assert r.status_code == 503 and "run out of credit" in r.json()["detail"]
+        assert len(MockAnthropic.requests) == 1
+    finally:
+        MockAnthropic.reject = None
