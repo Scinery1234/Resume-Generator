@@ -23,6 +23,8 @@ class MockAnthropic(BaseHTTPRequestHandler):
     requests = []
     reply = {"status": "draft", "questions": [], "resume": APPROVED, "verification_notes": []}
     stop_reason = "end_turn"
+    reject = None  # function(body, headers) -> error message for a 400, or None
+    prefix_text = ""  # prose before the JSON (as a model may write without structured outputs)
 
     def log_message(self, *a):
         pass
@@ -30,7 +32,16 @@ class MockAnthropic(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         MockAnthropic.requests.append({"path": self.path, "headers": dict(self.headers), "body": body})
-        text = json.dumps(MockAnthropic.reply)
+        why = MockAnthropic.reject and MockAnthropic.reject(body, dict(self.headers))
+        if why:
+            raw = json.dumps({"type": "error", "error": {"type": "invalid_request_error", "message": why}}).encode()
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+            return
+        text = MockAnthropic.prefix_text + json.dumps(MockAnthropic.reply)
         events = [
             ("message_start", {"type": "message_start", "message": {"id": "msg_1", "type": "message", "role": "assistant", "model": body["model"], "content": [], "stop_reason": None, "stop_sequence": None, "usage": {"input_tokens": 10, "output_tokens": 1}}}),
             ("content_block_start", {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}),
@@ -120,3 +131,45 @@ def test_bad_session_and_refusal(client):
 def test_open_saved_legacy_resume(client):
     r = client.post("/api/agent/open", json={"resume": {"name": "Ana Lee", "contact": {"email": "a@b.co"}, "summary": "S.", "experience": []}})
     assert r.status_code == 200 and r.json()["state"] == "AWAITING_CONTENT_APPROVAL"
+
+
+def _start(client):
+    return client.post("/api/agent/start", json={"materials": SOURCE})
+
+
+def test_rejected_options_are_retried_with_less(client):
+    """An account without the fallback beta, or without structured outputs, still gets a draft."""
+    MockAnthropic.requests.clear()
+    MockAnthropic.reject = lambda body, h: "fallbacks: not available for this organization" if "fallbacks" in body else None
+    try:
+        r = _start(client)
+        assert r.status_code == 200, r.text
+        assert "fallbacks" in MockAnthropic.requests[0]["body"] and "fallbacks" not in MockAnthropic.requests[1]["body"]
+        assert MockAnthropic.requests[1]["body"]["output_config"]["format"]["type"] == "json_schema"
+
+        MockAnthropic.requests.clear()
+        MockAnthropic.reject = lambda body, h: "bad" if "fallbacks" in body or "format" in body.get("output_config", {}) else None
+        MockAnthropic.prefix_text = "Here is the resume:\n"
+        r = _start(client)
+        assert r.status_code == 200, r.text
+        last = MockAnthropic.requests[-1]["body"]
+        assert "format" not in last["output_config"] and "JSON Schema" in last["system"]
+
+        MockAnthropic.requests.clear()
+        MockAnthropic.prefix_text = ""
+        MockAnthropic.reject = lambda body, h: "model: claude-opus-5-5 not found" if body["model"] == "claude-opus-5-5" else None
+        r = _start(client)
+        assert r.status_code == 200 and MockAnthropic.requests[-1]["body"]["model"] == "claude-sonnet-5-5"
+    finally:
+        MockAnthropic.reject = None
+        MockAnthropic.prefix_text = ""
+
+
+def test_unrecoverable_error_says_why(client):
+    MockAnthropic.reject = lambda body, h: "max_tokens: too large"
+    try:
+        r = _start(client)
+        assert r.status_code == 502
+        assert "Details:" in r.json()["detail"] and "max_tokens: too large" in r.json()["detail"]
+    finally:
+        MockAnthropic.reject = None

@@ -72,6 +72,9 @@ def _run(fn, *args, **kwargs):
     except ClaudeError as e:
         status, msg = CLAUDE_ERRORS.get(e.code, CLAUDE_ERRORS["error"])
         logger.error("Resume agent Claude call failed (%s): %s", e.code, e)
+        if e.code == "error":
+            # Say why, so a setup problem (API key, model access) can be seen without the server log.
+            msg = f"{msg} (Details: {str(e)[:400]})"
         raise HTTPException(status_code=status, detail=msg)
 
 
