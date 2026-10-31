@@ -1,0 +1,12 @@
+{
+  "content": {
+    "approve": ["Yes", "yes", "Y", "Approved", "Looks good", "looks good!", "Proceed", "Go ahead", "Content approved", "Yes please", "yes, thanks", "Perfect", "LGTM", "Yes, approved."],
+    "amend": ["Okay but change the summary to mention retail", "Yes, but remove the forklift licence", "Please shorten the summary", "Add that I speak Vietnamese", "Looks good except the title should be Logistics Manager", "Change Sydney to Parramatta"],
+    "unclear": ["okay", "ok", "hmm", "no", "not sure"]
+  },
+  "execution": {
+    "execute": ["Y", "y", "Yes", "yes please", "Go ahead", "Proceed", "do it", "Generate"],
+    "amend": ["Actually change the summary first", "Wait, add my Vietnamese language skills", "Remove the awards section please"],
+    "unclear": ["maybe", "hmm", "no", "not yet"]
+  }
+}

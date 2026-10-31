@@ -135,6 +135,7 @@
   transition: color .15s;
 }
 .lp-hero__link:hover { color: #fff; }
+button.lp-hero__link { background: none; border: 0; cursor: pointer; font-family: inherit; padding: 0; }
 
 .lp-hero__note {
   color: rgba(255,255,255,.55);

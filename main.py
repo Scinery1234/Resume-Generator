@@ -23,6 +23,7 @@ from utils import (
     MAX_FILES, MAX_FILE_SIZE, ALLOWED_EXTENSIONS, MAX_PROMPTS_GUEST
 )
 import uuid
+from agent_routes import router as agent_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -137,6 +138,9 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],  # Expose all headers for CORS
 )
+
+# Four-phase Australian resume agent (Claude): draft, approve, JSON, Word.
+app.include_router(agent_router)
 
 # File upload configuration
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "./uploads"))

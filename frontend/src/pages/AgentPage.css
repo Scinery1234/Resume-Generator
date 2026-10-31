@@ -1,0 +1,44 @@
+/* Australian resume agent: a form, then a conversation. Reuses .gen-page / .gen-nav from WizardPage.css. */
+@import './WizardPage.css';
+
+.agent-main { width: 100%; max-width: 860px; margin: 0 auto; padding: 24px 16px 48px; box-sizing: border-box; }
+.agent-card { background: #fff; border: 1px solid #e8ecf1; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 18px; }
+.agent-card h1 { margin: 0; font-size: 1.6rem; }
+.agent-field { display: flex; flex-direction: column; gap: 8px; }
+.agent-field__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.agent-field textarea, .agent-field input, .agent-reply textarea {
+    width: 100%; box-sizing: border-box; font: inherit; font-size: 0.95rem; padding: 10px 12px;
+    border: 1px solid #cfd6e0; border-radius: 10px; background: #fff; color: #1a1d23; resize: vertical;
+}
+.agent-upload { display: inline-flex; align-items: center; cursor: pointer; color: #0369a1; font-weight: 600; font-size: 0.9rem;
+    border: 1px solid #b6d4ea; border-radius: 999px; padding: 6px 14px; background: #f0f7fc; }
+.agent-upload:focus-within { outline: 2px solid #0369a1; outline-offset: 2px; }
+.agent-upload input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.agent-small { color: #5b6573; font-size: 0.88rem; margin: 0; }
+.agent-error { color: #b42318; background: #fef3f2; border: 1px solid #fecdca; border-radius: 10px; padding: 10px 12px; margin: 0; }
+.agent-conv { display: flex; flex-direction: column; gap: 14px; }
+.agent-msg { background: #fff; border: 1px solid #e8ecf1; border-radius: 14px; padding: 16px 18px; min-width: 0; overflow-wrap: anywhere; }
+.agent-msg--user { align-self: flex-end; background: #0369a1; color: #fff; border-color: #0369a1; max-width: 80%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.agent-msg--ok { border-color: #12b76a; }
+.agent-msg--fail { border-color: #f04438; }
+.agent-label { font-weight: 700; margin: 0 0 8px; }
+.agent-prompt { font-weight: 700; margin: 12px 0 0; }
+.agent-draft, .agent-json { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font-size: 0.9rem; line-height: 1.45;
+    background: #fafbfc; border: 1px solid #eef1f5; border-radius: 10px; padding: 14px; max-height: 70vh; overflow: auto; }
+.agent-draft { font-family: Calibri, Carlito, 'Segoe UI', sans-serif; }
+.agent-json { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8rem; }
+.agent-notes { margin-top: 12px; background: #fffaeb; border: 1px solid #fedf89; border-radius: 10px; padding: 10px 14px; font-size: 0.9rem; }
+.agent-notes ul { margin: 6px 0 0; padding-left: 20px; }
+.agent-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.agent-checks { list-style: none; padding: 0; margin: 8px 0; font-size: 0.88rem; }
+.agent-checks .ok { color: #067647; } .agent-checks .bad { color: #b42318; }
+.agent-busy { color: #5b6573; font-style: italic; margin: 0; }
+.agent-reply { display: flex; gap: 10px; align-items: flex-end; position: sticky; bottom: 0; background: #f4f6fb; padding: 10px 0; }
+.agent-reply textarea { flex: 1 1 auto; }
+@media (max-width: 600px) {
+    .agent-page .gen-nav { padding: 12px 16px; gap: 8px; }
+    .agent-page .gen-nav__logo { font-size: 0.95rem; text-align: center; }
+    .agent-card { padding: 16px; }
+    .agent-reply { flex-wrap: wrap; }
+    .agent-reply textarea { flex-basis: 100%; order: -1; }
+}

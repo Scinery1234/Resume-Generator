@@ -2,6 +2,17 @@
 
 A full-stack web application that uses AI (OpenAI GPT) to generate professionally tailored, Australian-style resumes. Upload your existing documents, paste a job description, and receive a polished `.docx` resume and live HTML preview.
 
+## Australian resume agent (main flow)
+
+`/agent` runs the four-phase resume agent on Claude. Spec, review and design: [`docs/RESUME_AGENT_SPEC.md`](docs/RESUME_AGENT_SPEC.md).
+
+1. Upload or paste your resume, and upload the job description (PDF or Word) or paste it.
+2. Read the full draft and ask for changes. Nothing moves on until you reply "Yes".
+3. **Phase 2, Prepare** shows the approved resume as strict JSON. Reply **Y**.
+4. A complete `python-docx` script is generated and run, and the Word file is checked: A4, Calibri 11 pt, black text, ruled headings, `List Bullet` bullets, no tables or links. Then you get `First_Last_Job_Title_Resume.docx` and the script.
+
+Needs `ANTHROPIC_API_KEY` and `RESUME_SESSION_SECRET` (see `.env.example`). The step-by-step wizard at `/wizard` still uses OpenAI.
+
 ---
 
 ## Table of Contents

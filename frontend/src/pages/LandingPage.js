@@ -25,8 +25,8 @@ const LandingPage = () => {
         };
     }, [token]);
 
-    // "Get Started" always goes straight to the wizard — no account required.
-    const handleGetStarted = () => navigate('/wizard');
+    // "Get Started" opens the Australian resume agent — no account required.
+    const handleGetStarted = () => navigate('/agent');
     
     const handleMyResumes = () => navigate('/my-resumes');
 
@@ -83,6 +83,7 @@ const LandingPage = () => {
                             </svg>
                         </button>
                         <a href="#how-it-works" className="lp-hero__link">See how it works</a>
+                        <button type="button" className="lp-hero__link" onClick={() => navigate('/wizard')}>Or use the step-by-step wizard</button>
                     </div>
                     <p className="lp-hero__note">No account required · No credit card · Free to generate</p>
                 </div>

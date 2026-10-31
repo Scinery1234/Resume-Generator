@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
 import WizardPage from './pages/WizardPage';
+import AgentPage from './pages/AgentPage';
 import MyResumesPage from './pages/MyResumesPage';
 import BackendDebugger from './components/BackendDebugger';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -17,6 +18,7 @@ const App = () => {
                 <Routes>
                     <Route path='/' element={<LandingPage />} />
                     <Route path='/auth' element={<AuthPage />} />
+                    <Route path='/agent' element={<AgentPage />} />
                     <Route path='/wizard' element={<WizardPage />} />
                     <Route path='/my-resumes' element={<MyResumesPage />} />
                 </Routes>
