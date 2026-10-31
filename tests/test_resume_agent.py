@@ -17,7 +17,7 @@ from resume_agent.execute import execute_python, generate_document, validate_doc
 from resume_agent.extract import extract_text
 from resume_agent.filename import sanitise_filename
 from resume_agent.schema import EMPTY_RESUME, RESUME_JSON_SCHEMA, from_legacy, normalise, to_json, validate
-from resume_agent.workflow import (APPROVE_PROMPT, EXECUTE_PROMPT, PHASE2_HEADING, State, advance,
+from resume_agent.workflow import (APPROVE_PROMPT, PHASE2_HEADING, State, advance,
                                    classify_content_reply, classify_execution_reply)
 
 HERE = os.path.dirname(__file__)
@@ -70,43 +70,54 @@ def test_full_workflow_gates_and_document():
     assert "requested_amendments" in fake.calls[-1]
     approved = out["resume"]
 
-    # Approval: Phase 2 JSON, exact wording, strict and unfenced, then the Y prompt.
+    # Approval: Phase 2 JSON (exact wording, strict, unfenced), then the script is
+    # generated, executed and validated in the same turn. No "Reply Y" step.
     out = agent.reply(out["session"], "Yes", SECRET, ask=fake)
-    assert out["state"] == State.AWAITING_EXECUTION_APPROVAL
-    [msg] = out["messages"]
-    assert msg["kind"] == "json" and msg["heading"] == PHASE2_HEADING and msg["prompt"] == EXECUTE_PROMPT
+    assert out["state"] == State.COMPLETED
+    msg, res = out["messages"]
+    assert msg["kind"] == "json" and msg["heading"] == PHASE2_HEADING and "prompt" not in msg
     assert not msg["json"].startswith("```") and "```" not in msg["json"]
     parsed = json.loads(msg["json"])
     assert parsed == approved and validate(parsed) == []
     assert list(parsed) == list(EMPTY_RESUME)
-
-    # Not a Y: ask again, do not run anything.
-    out = agent.reply(out["session"], "maybe", SECRET, ask=fake)
-    assert out["state"] == State.AWAITING_EXECUTION_APPROVAL and out["messages"][0]["text"] == EXECUTE_PROMPT
-
-    # Y: script generated, executed, validated, file returned in the same turn.
-    out = agent.reply(out["session"], "Y", SECRET, ask=fake)
-    assert out["state"] == State.COMPLETED
-    [res] = out["messages"]
-    assert res["ok"] and res["filename"] == "Jordan_Smith_Operations_Manager_Resume.docx"
+    assert res["kind"] == "result" and res["ok"] and res["filename"] == "Jordan_Smith_Operations_Manager_Resume.docx"
     assert res["message"] == "Jordan_Smith_Operations_Manager_Resume.docx successfully generated."
     assert res["validation"]["ok"] and res["attempts"][0]["exit_code"] == 0
-    assert "from docx import Document" in res["script"] and "def add_bottom_border" in res["script"]
+    assert "script" not in res
     doc = Document(io.BytesIO(base64.b64decode(res["docx"])))
     assert doc.paragraphs[0].text == "JORDAN SMITH"
     assert "Retail operations manager" in "\n".join(p.text for p in doc.paragraphs)
+
+    # A finished resume can be built again (e.g. after a page refresh lost the file).
+    again = agent.reply(out["session"], "Try again", SECRET, ask=fake)
+    assert again["state"] == State.COMPLETED and again["messages"][0]["ok"]
 
     # After completion, an amendment reopens the draft for approval.
     out = agent.reply(out["session"], "Please shorten the summary", SECRET, ask=fake)
     assert out["state"] == State.AWAITING_CONTENT_APPROVAL
 
 
-def test_amendment_at_execution_gate_returns_to_drafting():
+def test_failed_build_can_be_retried(monkeypatch):
+    import resume_agent.execute as ex
+    real = ex.execute_python
+    monkeypatch.setattr(ex, "execute_python", lambda code, name, **k: {**real("import sys; sys.exit(1)", name), "expected_output_filename": name})
     fake = FakeClaude()
     out = agent.start(SOURCE, SECRET, ask=fake)
     out = agent.reply(out["session"], "Approved", SECRET, ask=fake)
-    out = agent.reply(out["session"], "Actually change the summary first", SECRET, ask=fake)
-    assert out["state"] == State.AWAITING_CONTENT_APPROVAL and out["messages"][0]["kind"] == "draft"
+    assert out["state"] == State.EXECUTION_FAILED
+    assert not out["messages"][1]["ok"] and "docx" not in out["messages"][1]
+    monkeypatch.setattr(ex, "execute_python", real)
+    out = agent.reply(out["session"], "Try again", SECRET, ask=fake)
+    assert out["state"] == State.COMPLETED and out["messages"][0]["ok"]
+
+
+def test_session_saved_at_the_old_y_gate_still_builds():
+    fake = FakeClaude()
+    out = agent.start(SOURCE, SECRET, ask=fake)
+    s = agent.unseal(out["session"], SECRET)
+    s.update(state=State.AWAITING_EXECUTION_APPROVAL.value, resume=normalise(APPROVED))
+    out = agent.reply(agent.seal(s, SECRET), "Y", SECRET, ask=fake)
+    assert out["state"] == State.COMPLETED and out["messages"][0]["ok"]
 
 
 def test_questions_when_essential_information_is_missing():
@@ -125,9 +136,9 @@ def test_session_cannot_be_forged_or_skip_gates():
         agent.reply(body + "." + "0" * len(sig), "Y", SECRET, ask=FakeClaude())
     with pytest.raises(agent.AgentError):
         agent.reply(out["session"], "Y", "another-secret", ask=FakeClaude())
-    # "Y" at the content gate is approval of content only: it produces JSON, never a document.
-    nxt = agent.reply(out["session"], "Y", SECRET, ask=FakeClaude())
-    assert nxt["state"] == State.AWAITING_EXECUTION_APPROVAL and nxt["messages"][0]["kind"] == "json"
+    # Nothing is built until the content is approved.
+    nxt = agent.reply(out["session"], "okay", SECRET, ask=FakeClaude())
+    assert nxt["state"] == State.AWAITING_CONTENT_APPROVAL and all(m["kind"] != "result" for m in nxt["messages"])
 
 
 def test_short_materials_rejected():
@@ -161,6 +172,9 @@ def test_state_machine_rejects_skips():
         advance(State.AWAITING_CONTENT_APPROVAL, "execute")
     with pytest.raises(ValueError):
         advance(State.DRAFTING, "json_ready")
+    with pytest.raises(ValueError):
+        advance(State.DRAFTING, "script_ready")
+    assert advance(State.PREPARING_JSON, "json_ready") == State.GENERATING_SCRIPT
     assert advance(State.EXECUTION_FAILED, "retry") == State.GENERATING_SCRIPT
 
 

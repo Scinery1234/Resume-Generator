@@ -99,10 +99,8 @@ def test_full_flow_through_the_api(client):
     assert "<job_description>" in body["messages"][0]["content"] and "Jordan Smith" in body["messages"][0]["content"]
 
     out = client.post("/api/agent/reply", json={"session": out["session"], "message": "Yes"}).json()
-    assert out["state"] == "AWAITING_EXECUTION_APPROVAL" and json.loads(out["messages"][0]["json"]) == APPROVED
-
-    out = client.post("/api/agent/reply", json={"session": out["session"], "message": "Y"}).json()
-    res = out["messages"][0]
+    assert json.loads(out["messages"][0]["json"]) == APPROVED
+    res = out["messages"][1]
     assert out["state"] == "COMPLETED" and res["ok"], res["message"]
     assert res["message"] == "Jordan_Smith_Operations_Manager_Resume.docx successfully generated."
     doc = Document(io.BytesIO(base64.b64decode(res["docx"])))

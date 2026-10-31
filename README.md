@@ -8,8 +8,8 @@ A full-stack web application that uses AI (OpenAI GPT) to generate professionall
 
 1. Upload or paste your resume, and upload the job description (PDF or Word) or paste it.
 2. Read the full draft and ask for changes. Nothing moves on until you reply "Yes".
-3. **Phase 2, Prepare** shows the approved resume as strict JSON. Reply **Y**.
-4. A complete `python-docx` script is generated and run, and the Word file is checked: A4, Calibri 11 pt, black text, ruled headings, `List Bullet` bullets, no tables or links. Then you get `First_Last_Job_Title_Resume.docx` and the script.
+3. **Phase 2, Prepare** shows the approved resume as strict JSON.
+4. Straight away, a complete `python-docx` script is generated and run, and the Word file is checked: A4, Calibri 11 pt, black text, ruled headings, `List Bullet` bullets, no tables or links. Then you get `First_Last_Job_Title_Resume.docx`.
 
 Needs `ANTHROPIC_API_KEY` and `RESUME_SESSION_SECRET` (see `.env.example`). The step-by-step wizard at `/wizard` still uses OpenAI.
 

@@ -5,12 +5,14 @@ import { downloadBlob } from '../utils/fileDownload';
 import './AgentPage.css';
 
 // The four-phase Australian resume agent (see docs/RESUME_AGENT_SPEC.md):
-// draft -> "Approve content?" -> Phase 2 JSON -> "Reply Y" -> script runs -> .docx.
+// draft -> "Approve content?" -> Yes -> Phase 2 JSON, then the script runs and the .docx is checked.
 // The server holds the rules and the gates; this page shows the conversation.
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const STORE = 'resume-agent-v1';
-const QUICK = { AWAITING_CONTENT_APPROVAL: 'Yes', AWAITING_EXECUTION_APPROVAL: 'Y', EXECUTION_FAILED: 'Y' };
+const QUICK = { AWAITING_CONTENT_APPROVAL: 'Yes', EXECUTION_FAILED: 'Try again' };
+// Replies that approve the content, which also builds the Word file (for the busy message only).
+const APPROVAL = /^(y|yes|yep|yeah|approved?|looks good|proceed|go ahead|content approved|perfect|lgtm|try again|retry)\b/i;
 
 const b64ToBlob = (b64, type) => new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))], { type });
 
@@ -75,7 +77,6 @@ function AgentMessage({ m }) {
                 <div className="agent-msg">
                     <p className="agent-label">{m.heading}</p>
                     <pre className="agent-json">{m.json}</pre>
-                    <p className="agent-prompt">{m.prompt}</p>
                 </div>
             );
         case 'result':
@@ -85,10 +86,9 @@ function AgentMessage({ m }) {
                     {m.ok && (
                         <div className="agent-actions">
                             <button className="btn-primary" onClick={() => downloadBlob(b64ToBlob(m.docx, DOCX), m.filename)}>Download {m.filename}</button>
-                            <button className="btn-secondary" onClick={() => downloadBlob(new Blob([m.script], { type: 'text/x-python' }), 'build_resume.py')}>Download the Python script</button>
                         </div>
                     )}
-                    {!m.ok && <p>Reply Y and I will correct the script and run it again.</p>}
+                    {!m.ok && <p>Reply “Try again” and I will correct the script and run it again.</p>}
                     {m.validation && (
                         <details>
                             <summary>Checks on the Word file ({m.validation.checks.filter(c => c.ok).length} of {m.validation.checks.length} passed)</summary>
@@ -139,10 +139,10 @@ const AgentPage = () => {
     const send = async text => {
         const msg = (text ?? reply).trim();
         if (!msg || busy) return;
-        const generating = conv.state === 'AWAITING_EXECUTION_APPROVAL' || conv.state === 'EXECUTION_FAILED';
+        const generating = conv.state !== 'DRAFTING' && APPROVAL.test(msg) && msg.split(/\s+/).length <= 4;
         setError(''); setReply('');
         setConv(c => ({ ...c, messages: [...c.messages, { role: 'user', text: msg }] }));
-        setBusy(generating ? 'Generating the Python script, running it and checking the Word file…' : 'Working on it…');
+        setBusy(generating ? 'Building your Word resume and checking it…' : 'Working on it…');
         try {
             const d = await post('/api/agent/reply', { session: conv.session, message: msg });
             setConv(c => ({ session: d.session, state: d.state, messages: [...c.messages, ...d.messages.map(m => ({ role: 'agent', ...m }))] }));
@@ -164,7 +164,7 @@ const AgentPage = () => {
                 {!conv && (
                     <form className="agent-card" onSubmit={start}>
                         <h1>Write my Australian resume</h1>
-                        <p className="agent-small">You'll see a full draft first. Nothing goes into Word until you approve the content, and the Word file is only built after you reply Y. Everything comes from your own materials: nothing is invented.</p>
+                        <p className="agent-small">You'll see a full draft first. Nothing goes into Word until you approve the content; once you reply Yes, the Word file is built and checked straight away. Everything comes from your own materials: nothing is invented.</p>
 
                         <div className="agent-field">
                             <div className="agent-field__head"><b>1. Your current resume or career notes</b>
@@ -197,7 +197,7 @@ const AgentPage = () => {
 
                 {conv && (
                     <div className="agent-conv">
-                        {conv.messages.map((m, i) => (m.stale ? <div className="agent-msg" key={i}><p>{m.message}</p><p className="agent-small">Reply Y to build the file again.</p></div> : <AgentMessage key={i} m={m} />))}
+                        {conv.messages.map((m, i) => (m.stale ? <div className="agent-msg" key={i}><p>{m.message}</p><p className="agent-small">Reply “Try again” to build the file again.</p></div> : <AgentMessage key={i} m={m} />))}
                         {busy && <p className="agent-busy" aria-live="polite">{busy}</p>}
                         {error && <p className="agent-error" role="alert">{error}</p>}
                         <form className="agent-reply" onSubmit={e => { e.preventDefault(); send(); }}>
